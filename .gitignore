@@ -1,0 +1,20 @@
+# --- compiled binary (device-specific, di-build ulang oleh build.sh/setup.sh) ---
+tools/metal-kangaroo/metal-kangaroo
+
+# --- runtime logs (bukan progress) ---
+logs/*.metal.log
+logs/sweep_scheduler.log
+logs/.pids/
+tools/sweep/sweep_done.log
+tools/sweep/*.sweep.log
+
+# --- build artifacts ---
+*.o
+*.o.d
+
+# --- OS / editor junk ---
+.DS_Store
+*~
+*.swp
+__pycache__/
+*.pyc
