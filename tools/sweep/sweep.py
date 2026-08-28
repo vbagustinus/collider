@@ -202,18 +202,23 @@ def main():
     cfg = parse_config(args.config)
     pub_hex = cfg.get("PUBKEY", "")
     tgt = cfg.get("TARGET_HASH160", "")
-    if not pub_hex:
-        raise SystemExit("ERROR: config has no PUBKEY")
 
     priv_int = int(args.priv, 16)
-    addr = addr_from_pub(pub_hex)
+    pk = PrivateKey.from_int(priv_int)
+    derived_pub = pk.public_key.format(compressed=True)
+
+    # Keyhunt-style configs carry only TARGET_HASH160 (no PUBKEY): derive the
+    # pubkey from the private key and verify it against the target hash160.
+    if not pub_hex:
+        pub_hex = derived_pub.hex()
+        addr = h160_to_addr(hash160(derived_pub))
+    else:
+        addr = addr_from_pub(pub_hex)
     print(f"[sweep] puzzle address = {addr}")
 
     # GUARANTEE THE MATCH IS VALID before moving any funds:
     # the found private key MUST derive exactly the puzzle's TARGET_HASH160.
-    pk = PrivateKey.from_int(priv_int)
-    derived_pub = pk.public_key.format(compressed=True)
-    if derived_pub != bytes.fromhex(pub_hex) and pk.public_key.format(compressed=False) != bytes.fromhex(pub_hex):
+    if bytes.fromhex(pub_hex) not in (derived_pub, pk.public_key.format(compressed=False)):
         raise SystemExit("ERROR: private key does NOT derive the config PUBKEY -> invalid MATCH, abort sweep")
     if tgt:
         if hash160(derived_pub).hex() != tgt.lower():
