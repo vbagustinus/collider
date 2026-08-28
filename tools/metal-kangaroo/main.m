@@ -226,6 +226,26 @@ int main(int argc, char** argv){
     id<MTLDevice> dev=MTLCreateSystemDefaultDevice();
     if(!dev){ printf("GPU device: NONE (Metal unavailable)\n"); return 2; }
     printf("GPU device: %s\n", [[dev name] UTF8String]);
+    // report core-concurrency info (8-core cap enforced at dispatch)
+    MTLCompileOptions* copts=[[MTLCompileOptions alloc] init];
+    copts.fastMathEnabled=YES;
+    NSString* metalSrc=[NSString stringWithContentsOfFile:
+      [[[NSString stringWithUTF8String:argv[0]] stringByDeletingLastPathComponent]
+        stringByAppendingPathComponent:@"kangaroo.metal"] encoding:NSUTF8StringEncoding error:nil];
+    NSError* err=nil;
+    id<MTLLibrary> lib=[dev newLibraryWithSource:metalSrc options:copts error:&err];
+    if(lib){
+      id<MTLFunction> fWalk=[lib newFunctionWithName:@"kangaroo"];
+      id<MTLComputePipelineState> ps=[dev newComputePipelineStateWithFunction:fWalk error:&err];
+      if(ps){
+        NSUInteger execW=ps.threadExecutionWidth;
+        NSUInteger maxTG=ps.maxTotalThreadsPerThreadgroup;
+        NSUInteger cores=maxTG/execW;
+        printf("GPU cores (reported): %lu (execWidth=%lu, maxTG=%lu)\n",
+               (unsigned long)cores,(unsigned long)execW,(unsigned long)maxTG);
+        if(cores>8) printf("WARNING: GPU has >8 cores; dispatch will be capped to 8 cores.\n");
+      }
+    }
     return 0;
   }
   P_B7=b_setu(7);
@@ -389,7 +409,45 @@ int main(int argc, char** argv){
   id<MTLBuffer> bDpCnt=[dev newBufferWithLength:4 options:MTLResourceStorageModeShared];
   id<MTLBuffer> bDpRec=[dev newBufferWithLength:maxRec*72 options:MTLResourceStorageModeShared];
 
-  MTLSize thg=MTLSizeMake(256,1,1), grid=MTLSizeMake((kangs+255)/256,1,1);
+  // --- 8-core GPU cap: query device limits and constrain threadgroup size ---
+  NSUInteger execW=[psWalk threadExecutionWidth];
+  NSUInteger maxTG=[psWalk maxTotalThreadsPerThreadgroup];
+  NSUInteger desiredTG=execW*8; // 8 cores × SIMD width
+  NSUInteger tgSize=(desiredTG<=maxTG)?desiredTG:(NSUInteger)maxTG;
+  // ensure tgSize is multiple of execW (Metal requirement)
+  tgSize=(tgSize/execW)*execW;
+  if(tgSize<execW) tgSize=execW;
+  // clamp kang count to fit in tgSize-aligned grid
+  NSUInteger tgThreads=(NSUInteger)kangs;
+  if(tgThreads%(NSUInteger)tgSize!=0) tgThreads=((tgThreads/(NSUInteger)tgSize)+1)*(NSUInteger)tgSize;
+  printf("GPU 8-core cap: execWidth=%lu  maxTG=%lu  threadgroup=%lu  kangCount=%lu\n",
+         (unsigned long)execW,(unsigned long)maxTG,(unsigned long)tgSize,(unsigned long)tgThreads);
+  fflush(stdout);
+  MTLSize thg=MTLSizeMake((NSUInteger)tgSize,1,1);
+  MTLSize grid=MTLSizeMake((NSUInteger)tgThreads/(NSUInteger)tgSize,1,1);
+  KC=(uint32_t)tgThreads; // update KC so kernels see aligned count
+  // re-size startDist and kang buffers if kang count changed
+  if((uint32_t)tgThreads!=(uint32_t)kangs){
+    free(startDist); startDist=malloc(tgThreads*4*sizeof(uint64_t));
+    // regenerate start distances for the new count
+    srand(12345);
+    { B256 wildRange=windowW; B256 x32m1=tameTop;
+      for(int i=0;i<(int)tgThreads;i++){
+        B256 d;
+        if(i<tameCut){ if(x32m1.w[0]||x32m1.w[1]||x32m1.w[2]||x32m1.w[3]||x32m1.w[4]||x32m1.w[5]||x32m1.w[6]||x32m1.w[7])
+            d=b_add(b_setu(1), b_rndmax(x32m1)); else d=b_setu(1); }
+        else {
+          B256 r=b_rndmax(wildRange); r.w[0]&=~1u;
+          if(b_iszero(r)) r=b_setu(2);
+          d=r;
+        }
+        B256_to_le64s(startDist+i*4, d);
+      } }
+    bStart=[dev newBufferWithBytes:startDist length:tgThreads*4*sizeof(uint64_t) options:MTLResourceStorageModeShared];
+    bKang=[dev newBufferWithLength:tgThreads*96 options:MTLResourceStorageModeShared];
+    bDist=[dev newBufferWithLength:tgThreads*32 options:MTLResourceStorageModeShared];
+    bHist=[dev newBufferWithLength:tgThreads*16*sizeof(uint64_t) options:MTLResourceStorageModeShared];
+  }
 
   // kernelGen
   { id<MTLCommandBuffer> cb=[q commandBuffer]; id<MTLComputeCommandEncoder> e=[cb computeCommandEncoder];
