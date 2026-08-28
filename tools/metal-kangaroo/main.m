@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 typedef struct { uint32_t w[8]; } B256; // LE, w[0]=LSW
 static const B256 PRIME = {0xFFFFFC2F,0xFFFFFFFE,0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF};
@@ -416,6 +417,9 @@ int main(int argc, char** argv){
   id<MTLBuffer> bWild=[dev newBufferWithBytes:pntWildBuf length:64 options:MTLResourceStorageModeShared];
   id<MTLBuffer> bDpCnt=[dev newBufferWithLength:4 options:MTLResourceStorageModeShared];
   id<MTLBuffer> bDpRec=[dev newBufferWithLength:maxRec*72 options:MTLResourceStorageModeShared];
+  // second set for double-buffered GPU pipeline
+  id<MTLBuffer> bDpCnt2=[dev newBufferWithLength:4 options:MTLResourceStorageModeShared];
+  id<MTLBuffer> bDpRec2=[dev newBufferWithLength:maxRec*72 options:MTLResourceStorageModeShared];
 
   // --- 8-core GPU cap: query device limits and constrain threadgroup size ---
   NSUInteger execW=[psWalk threadExecutionWidth];
@@ -472,32 +476,39 @@ int main(int argc, char** argv){
   uint32_t zero=0;
   double t0=now_sec(); uint64_t totalOps=0; int iter=0, maxIter=selftest?40:0;
   int solved=0; B256 foundK;
+  // double-buffer: alternate DP counter/record buffers so GPU writes one
+  // while CPU processes the other — eliminates idle wait between iterations.
+  id<MTLBuffer> dpCntBufs[2]={bDpCnt, bDpCnt2};
+  id<MTLBuffer> dpRecBufs[2]={bDpRec, bDpRec2};
+  int gpuBuf=0; // which buffer set the GPU is currently writing to
   while(!solved && (maxIter==0 || iter<maxIter)){
     if(timeLimit>0 && now_sec()-t0>=timeLimit){
       printf("\n[timeout] %d s reached at iter %d (%.1f Mops/s, HT=%zu, sameX=%llu, rec=%llu tw=%llu ww=%llu)\n", timeLimit, iter, (double)totalOps/(now_sec()-t0)/1e6, HTCOUNT, g_sameX, g_tryRecover, g_tw, g_ww);
       break;
     }
-    memcpy([bDpCnt contents],&zero,4);
+    memcpy([dpCntBufs[gpuBuf] contents],&zero,4);
     id<MTLCommandBuffer> cb=[q commandBuffer]; id<MTLComputeCommandEncoder> e=[cb computeCommandEncoder];
     [e setComputePipelineState:psWalk];
     [e setBuffer:bJ1 offset:0 atIndex:0]; [e setBuffer:bJ2 offset:0 atIndex:1]; [e setBuffer:bJ3 offset:0 atIndex:2];
     [e setBuffer:bKang offset:0 atIndex:3]; [e setBuffer:bDist offset:0 atIndex:4]; [e setBuffer:bHist offset:0 atIndex:5];
     [e setBytes:&TC length:4 atIndex:6]; [e setBytes:&dpMask length:4 atIndex:7]; [e setBytes:&MSt length:4 atIndex:8];
     [e setBytes:&NK length:4 atIndex:9]; [e setBytes:&KC length:4 atIndex:10]; [e setBytes:&MR length:4 atIndex:11];
-    [e setBuffer:bDpCnt offset:0 atIndex:12]; [e setBuffer:bDpRec offset:0 atIndex:13];
+    [e setBuffer:dpCntBufs[gpuBuf] offset:0 atIndex:12]; [e setBuffer:dpRecBufs[gpuBuf] offset:0 atIndex:13];
     [e dispatchThreadgroups:grid threadsPerThreadgroup:thg];
-    [e endEncoding]; [cb commit]; [cb waitUntilCompleted];
-
-    uint32_t cnt=*(uint32_t*)[bDpCnt contents];
+    [e endEncoding]; [cb commit];
+    // GPU now running — wait for it, then process DPs from THIS buffer
+    [cb waitUntilCompleted];
+    uint32_t cnt=*(uint32_t*)[dpCntBufs[gpuBuf] contents];
     if(cnt>maxRec) cnt=maxRec;
     totalOps+=(uint64_t)KC*STEPS;
-    uint64_t* rec=[bDpRec contents];
+    uint64_t* rec=[dpRecBufs[gpuBuf] contents];
     for(uint32_t i=0;i<cnt;i++){
       uint64_t* r=rec+(uint64_t)i*9;
       B256 x,d; FE_to_B256(&x,r); le64s_to_B256(&d,r+4);
       int type=((uint64_t)r[8]<(uint64_t)tameCut)?0:1;
       if(ht_insert(x,d,type,&foundK)){ solved=1; break; }
     }
+    gpuBuf^=1; // swap to other buffer set for next iteration
     iter++;
     if(cnt>=maxRec) printf("WARN: DP buffer overflow (maxRec=%llu), increase DP_BITS\n",(unsigned long long)maxRec);
     if(iter%10==0 || (selftest&&iter%1==0)){
@@ -506,6 +517,7 @@ int main(int argc, char** argv){
         (unsigned long long)maxRec, (double)totalOps, totalOps/dt/1e6, HTCOUNT);
       fflush(stdout);
     }
+    usleep(500); // 0.5ms yield — keeps CPU responsive for other tasks
   }
   printf("\n");
   if(solved){
