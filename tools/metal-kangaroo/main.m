@@ -228,7 +228,11 @@ int main(int argc, char** argv){
     printf("GPU device: %s\n", [[dev name] UTF8String]);
     // report core-concurrency info (8-core cap enforced at dispatch)
     MTLCompileOptions* copts=[[MTLCompileOptions alloc] init];
+#if (__MAC_OS_X_VERSION_MAX_ALLOWED >= 150000)
+    copts.mathMode = MTLMathModeFast;
+#else
     copts.fastMathEnabled=YES;
+#endif
     NSString* metalSrc=[NSString stringWithContentsOfFile:
       [[[NSString stringWithUTF8String:argv[0]] stringByDeletingLastPathComponent]
         stringByAppendingPathComponent:@"kangaroo.metal"] encoding:NSUTF8StringEncoding error:nil];
@@ -381,7 +385,11 @@ int main(int argc, char** argv){
     [[[NSString stringWithUTF8String:argv[0]] stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"kangaroo.metal"] encoding:NSUTF8StringEncoding error:nil];
   NSError* err=nil;
   MTLCompileOptions* copts=[[MTLCompileOptions alloc] init];
+#if (__MAC_OS_X_VERSION_MAX_ALLOWED >= 150000)
+  copts.mathMode = MTLMathModeFast;
+#else
   copts.fastMathEnabled=YES;
+#endif
   id<MTLLibrary> lib=[dev newLibraryWithSource:metalSrc options:copts error:&err];
   if(!lib){ printf("metal lib FAILED: %s\n",[[err localizedDescription] UTF8String]); return 2; }
   id<MTLFunction> fGen=[lib newFunctionWithName:@"kernelGen"];
@@ -482,7 +490,7 @@ int main(int argc, char** argv){
 
     uint32_t cnt=*(uint32_t*)[bDpCnt contents];
     if(cnt>maxRec) cnt=maxRec;
-    totalOps+=(uint64_t)kangs*STEPS;
+    totalOps+=(uint64_t)KC*STEPS;
     uint64_t* rec=[bDpRec contents];
     for(uint32_t i=0;i<cnt;i++){
       uint64_t* r=rec+(uint64_t)i*9;

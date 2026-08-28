@@ -185,10 +185,22 @@ PY
 }
 
 append_checkpoint() {   # $1=presentage  $2=lo-hex  (call after the round ends)
+  local lockdir="$CKPT.lock"
+  local maxwait=30 waited=0
+  while ! mkdir "$lockdir" 2>/dev/null; do
+    sleep 1; waited=$((waited+1))
+    if [[ $waited -ge $maxwait ]]; then
+      echo "[ckpt] WARN: could not acquire lock after ${maxwait}s, proceeding anyway"
+      rmdir "$lockdir" 2>/dev/null; break
+    fi
+  done
+  trap 'rmdir "$lockdir" 2>/dev/null' EXIT
   local tmp="$CKPT.tmp"
   sed '$d' "$CKPT" > "$tmp"
   printf '  {presentage: "%s", hex: "%s"},\n]\n' "$1" "$2" >> "$tmp"
   mv "$tmp" "$CKPT"
+  rmdir "$lockdir" 2>/dev/null
+  trap - EXIT
 }
 
 echo "=== [$name] random-subrange collider ${ONCE_MODE} (puzzle $PUZZLE, dp $DP_BITS, jump ${JUMP_PCT}%, ${TIME}s/round) ==="
@@ -234,6 +246,7 @@ while :; do
           SWEEP_OUT="$LOG_DIR/${name}.sweep.log"
           if python3 "$B1000/tools/sweep/sweep.py" --config "$CONF" --priv "$PRIV" \
                ${SWEEP_ADDRESS:+--sweep "$SWEEP_ADDRESS"} \
+               $( [[ -n "${SWEEP_CONFIRM:-}" && -z "${SWEEP_DRYRUN:-}" ]] && echo --confirm ) \
                $( [[ -n "${SWEEP_DRYRUN:-}" ]] && echo --dry-run ) >> "$SWEEP_OUT" 2>&1; then
             echo "[sweep] done (see $SWEEP_OUT)"
             echo "PUZZLE=$PUZZLE ADDR=$name" >> "$SWEEP_DONE"

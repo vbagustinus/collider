@@ -190,13 +190,15 @@ def main():
     ap.add_argument("--priv", required=True, help="solved private key hex (256-bit)")
     ap.add_argument("--sweep", default=resolve_sweep_address())
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--confirm", action="store_true",
+                    help="required to actually broadcast; without this flag, sweep is always dry-run")
     ap.add_argument("--testnet", action="store_true", help="use blockstream testnet API + testnet addresses")
     args = ap.parse_args()
 
     if args.testnet:
         ESP = "https://blockstream.info/testnet/api"
         NET_PREFIX = 0x6F
-    dry = args.dry_run or os.environ.get("SWEEP_DRYRUN") == "1"
+    dry = args.dry_run or os.environ.get("SWEEP_DRYRUN") == "1" or not args.confirm
     cfg = parse_config(args.config)
     pub_hex = cfg.get("PUBKEY", "")
     tgt = cfg.get("TARGET_HASH160", "")
