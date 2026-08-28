@@ -248,7 +248,7 @@ int main(int argc, char** argv){
         NSUInteger cores=maxTG/execW;
         printf("GPU cores (reported): %lu (execWidth=%lu, maxTG=%lu)\n",
                (unsigned long)cores,(unsigned long)execW,(unsigned long)maxTG);
-        if(cores>8) printf("WARNING: GPU has >8 cores; dispatch will be capped to 8 cores.\n");
+        printf("kang pool will use ALL cores, capped at 10000 kangs.\n");
       }
     }
     return 0;
@@ -421,36 +421,21 @@ int main(int argc, char** argv){
   id<MTLBuffer> bDpCnt2=[dev newBufferWithLength:4 options:MTLResourceStorageModeShared];
   id<MTLBuffer> bDpRec2=[dev newBufferWithLength:maxRec*72 options:MTLResourceStorageModeShared];
 
-  // --- 8-core GPU cap: limit grid to exactly 8 threadgroups ---
-  // Metal distributes threadgroups across ALL cores; to use only 8 cores,
-  // the grid must have at most 8 threadgroups.
+  // --- kang pool sizing: use ALL GPU cores, cap effective kangs at ~10k ---
+  // (user target: 6k-10k). Threadgroup size is bounded by the GPU's maxTG,
+  // so we just pick a threadgroup = maxTG and let the grid span every core.
   NSUInteger execW=[psWalk threadExecutionWidth];
   NSUInteger maxTG=[psWalk maxTotalThreadsPerThreadgroup];
-  NSUInteger maxCores=8;
+  NSUInteger maxKangs=10000;                 // ceiling for effective kang count
   NSUInteger tgThreads=(NSUInteger)kangs;
-  // first pass: find tgSize that fits in maxTG with grid <= maxCores
-  NSUInteger tgSize=maxTG;
+  if(tgThreads>maxKangs) tgThreads=maxKangs; // raise the old 8-core cap into 6k-10k range
+  if(tgThreads<6000 && (NSUInteger)kangs>=6000) tgThreads=6000; // soft floor when auto-sized
+  NSUInteger tgSize=maxTG;                   // largest threadgroup the GPU allows
   NSUInteger gridW=(tgThreads+tgSize-1)/tgSize;
-  if(gridW>maxCores){
-    // need larger tgSize to fit in fewer groups
-    tgSize=(tgThreads+maxCores-1)/maxCores;
-    tgSize=(tgSize/execW)*execW; // align to execW
-    if(tgSize>maxTG) tgSize=maxTG;
-    gridW=(tgThreads+tgSize-1)/tgSize;
-  }
-  // clamp grid to maxCores
-  if(gridW>maxCores) gridW=maxCores;
-  // recompute tgSize from clamped grid
-  tgSize=(tgThreads+gridW-1)/gridW;
-  tgSize=(tgSize/execW)*execW;
-  if(tgSize>maxTG) tgSize=maxTG;
-  if(tgSize<execW) tgSize=execW;
-  // final alignment
-  gridW=(tgThreads+tgSize-1)/tgSize;
-  if(gridW>maxCores) gridW=maxCores;
-  tgThreads=gridW*tgSize; // align kang count
-  printf("GPU 8-core cap: execWidth=%lu  maxTG=%lu  threadgroup=%lu  grid=%lu  kangCount=%lu\n",
-         (unsigned long)execW,(unsigned long)maxTG,(unsigned long)tgSize,(unsigned long)gridW,(unsigned long)tgThreads);
+  tgThreads=gridW*tgSize;                    // align kang count to threadgroups
+  if(tgThreads>(NSUInteger)kangs && (NSUInteger)kangs<maxKangs) tgThreads=(NSUInteger)kangs;
+  printf("GPU pool sizing: execWidth=%lu  maxTG=%lu  threadgroup=%lu  grid=%lu  kangCount=%lu  (cap=%lu)\n",
+         (unsigned long)execW,(unsigned long)maxTG,(unsigned long)tgSize,(unsigned long)gridW,(unsigned long)tgThreads,(unsigned long)maxKangs);
   fflush(stdout);
   MTLSize thg=MTLSizeMake((NSUInteger)tgSize,1,1);
   MTLSize grid=MTLSizeMake((NSUInteger)gridW,1,1);

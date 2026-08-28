@@ -246,7 +246,7 @@ while :; do
           SWEEP_OUT="$LOG_DIR/${name}.sweep.log"
           if python3 "$B1000/tools/sweep/sweep.py" --config "$CONF" --priv "$PRIV" \
                ${SWEEP_ADDRESS:+--sweep "$SWEEP_ADDRESS"} \
-               $( [[ -n "${SWEEP_CONFIRM:-}" && -z "${SWEEP_DRYRUN:-}" ]] && echo --confirm ) \
+               $( [[ -z "${SWEEP_DRYRUN:-}" ]] && echo --confirm ) \
                $( [[ -n "${SWEEP_DRYRUN:-}" ]] && echo --dry-run ) >> "$SWEEP_OUT" 2>&1; then
             echo "[sweep] done (see $SWEEP_OUT)"
             echo "PUZZLE=$PUZZLE ADDR=$name" >> "$SWEEP_DONE"
