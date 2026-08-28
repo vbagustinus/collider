@@ -192,7 +192,7 @@ static void ht_resize(size_t newsize){
   free(old);
 }
 static int ht_insert(B256 x, B256 d, int type, B256* out){ // type 0=tame, 1=wild
-  if(HTCOUNT*10 > HTSIZE*7){ size_t ns=HTSIZE*2; ht_resize(ns); }
+  if(HTCOUNT*10 > HTSIZE*5){ size_t ns=HTSIZE*2; ht_resize(ns); } // resize at 50% instead of 70%
   uint64_t hsh=hash256(x);
   for(size_t p=0;p<HTSIZE;p++){
     Slot* s=HT+(size_t)((hsh+p)%HTSIZE);
@@ -421,22 +421,39 @@ int main(int argc, char** argv){
   id<MTLBuffer> bDpCnt2=[dev newBufferWithLength:4 options:MTLResourceStorageModeShared];
   id<MTLBuffer> bDpRec2=[dev newBufferWithLength:maxRec*72 options:MTLResourceStorageModeShared];
 
-  // --- 8-core GPU cap: query device limits and constrain threadgroup size ---
+  // --- 8-core GPU cap: limit grid to exactly 8 threadgroups ---
+  // Metal distributes threadgroups across ALL cores; to use only 8 cores,
+  // the grid must have at most 8 threadgroups.
   NSUInteger execW=[psWalk threadExecutionWidth];
   NSUInteger maxTG=[psWalk maxTotalThreadsPerThreadgroup];
-  NSUInteger desiredTG=execW*8; // 8 cores × SIMD width
-  NSUInteger tgSize=(desiredTG<=maxTG)?desiredTG:(NSUInteger)maxTG;
-  // ensure tgSize is multiple of execW (Metal requirement)
-  tgSize=(tgSize/execW)*execW;
-  if(tgSize<execW) tgSize=execW;
-  // clamp kang count to fit in tgSize-aligned grid
+  NSUInteger maxCores=8;
   NSUInteger tgThreads=(NSUInteger)kangs;
-  if(tgThreads%(NSUInteger)tgSize!=0) tgThreads=((tgThreads/(NSUInteger)tgSize)+1)*(NSUInteger)tgSize;
-  printf("GPU 8-core cap: execWidth=%lu  maxTG=%lu  threadgroup=%lu  kangCount=%lu\n",
-         (unsigned long)execW,(unsigned long)maxTG,(unsigned long)tgSize,(unsigned long)tgThreads);
+  // first pass: find tgSize that fits in maxTG with grid <= maxCores
+  NSUInteger tgSize=maxTG;
+  NSUInteger gridW=(tgThreads+tgSize-1)/tgSize;
+  if(gridW>maxCores){
+    // need larger tgSize to fit in fewer groups
+    tgSize=(tgThreads+maxCores-1)/maxCores;
+    tgSize=(tgSize/execW)*execW; // align to execW
+    if(tgSize>maxTG) tgSize=maxTG;
+    gridW=(tgThreads+tgSize-1)/tgSize;
+  }
+  // clamp grid to maxCores
+  if(gridW>maxCores) gridW=maxCores;
+  // recompute tgSize from clamped grid
+  tgSize=(tgThreads+gridW-1)/gridW;
+  tgSize=(tgSize/execW)*execW;
+  if(tgSize>maxTG) tgSize=maxTG;
+  if(tgSize<execW) tgSize=execW;
+  // final alignment
+  gridW=(tgThreads+tgSize-1)/tgSize;
+  if(gridW>maxCores) gridW=maxCores;
+  tgThreads=gridW*tgSize; // align kang count
+  printf("GPU 8-core cap: execWidth=%lu  maxTG=%lu  threadgroup=%lu  grid=%lu  kangCount=%lu\n",
+         (unsigned long)execW,(unsigned long)maxTG,(unsigned long)tgSize,(unsigned long)gridW,(unsigned long)tgThreads);
   fflush(stdout);
   MTLSize thg=MTLSizeMake((NSUInteger)tgSize,1,1);
-  MTLSize grid=MTLSizeMake((NSUInteger)tgThreads/(NSUInteger)tgSize,1,1);
+  MTLSize grid=MTLSizeMake((NSUInteger)gridW,1,1);
   KC=(uint32_t)tgThreads; // update KC so kernels see aligned count
   // re-size startDist and kang buffers if kang count changed
   if((uint32_t)tgThreads!=(uint32_t)kangs){
@@ -472,7 +489,7 @@ int main(int argc, char** argv){
     [e endEncoding]; [cb commit]; [cb waitUntilCompleted]; }
   printf("kernelGen done, starting walk...\n"); fflush(stdout);
 
-  HTSIZE=1<<22; HT=calloc(HTSIZE,sizeof(Slot)); // 4M slots (64MB), supports large kangaroo counts
+  HTSIZE=1<<24; HT=calloc(HTSIZE,sizeof(Slot)); // 16M slots (256MB), fewer resizes
   uint32_t zero=0;
   double t0=now_sec(); uint64_t totalOps=0; int iter=0, maxIter=selftest?40:0;
   int solved=0; B256 foundK;
@@ -517,7 +534,7 @@ int main(int argc, char** argv){
         (unsigned long long)maxRec, (double)totalOps, totalOps/dt/1e6, HTCOUNT);
       fflush(stdout);
     }
-    usleep(500); // 0.5ms yield — keeps CPU responsive for other tasks
+    usleep(2000); // 2ms yield — keeps CPU responsive for other tasks
   }
   printf("\n");
   if(solved){
