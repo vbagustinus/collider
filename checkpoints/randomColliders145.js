@@ -971,4 +971,12 @@ let randomColliders145 = [
   {presentage: "65.80432506", hex: "0x2e8d8fab7ec95eae3633c3a6de50adc2707d29"},
   {presentage: "58.57795164", hex: "0x2995b8306852a4bd8f1734a4f84779e721b77b"},
   {presentage: "63.08073309", hex: "0x2cae3582961ce263e2d3745bc77c0000abcc37"},
+  {presentage: "86.00281076", hex: "0x3c707ea44010bc3ad944d54719c4f81728654e"},
+  {presentage: "38.97778927", hex: "0x1c1c1745fa353aca564fedd40377d9ab5786fe"},
+  {presentage: "27.28636438", hex: "0x1412666efa33b83e4a6883f7f1be9eb6b9e5cf"},
+  {presentage: "22.30299534", hex: "0x10a553c20ed8b5e4280831d2b5efe68255852c"},
+  {presentage: "52.10207514", hex: "0x2521f718f64617e7525f1d71d5db3e54a471db"},
+  {presentage: "38.85522072", hex: "0x1c0684d3237e09704130a1de619fad2ef7ba0f"},
+  {presentage: "17.12154577", hex: "0xd15645dc0249dc420abc718adcbd5abee85c8"},
+  {presentage: "97.20086058", hex: "0x442359f96b3b6256b746d3a4017c81dbb7cbd3"},
 ]
