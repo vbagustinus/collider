@@ -426,7 +426,7 @@ int main(int argc, char** argv){
   // so we just pick a threadgroup = maxTG and let the grid span every core.
   NSUInteger execW=[psWalk threadExecutionWidth];
   NSUInteger maxTG=[psWalk maxTotalThreadsPerThreadgroup];
-  NSUInteger maxKangs=10000;                 // ceiling for effective kang count
+  NSUInteger maxKangs=6000;                  // reduced from 10k — less GPU pressure = less Mac lag
   NSUInteger tgThreads=(NSUInteger)kangs;
   if(tgThreads>maxKangs) tgThreads=maxKangs; // raise the old 8-core cap into 6k-10k range
   if(tgThreads<6000 && (NSUInteger)kangs>=6000) tgThreads=6000; // soft floor when auto-sized
@@ -519,7 +519,7 @@ int main(int argc, char** argv){
         (unsigned long long)maxRec, (double)totalOps, totalOps/dt/1e6, HTCOUNT);
       fflush(stdout);
     }
-    usleep(2000); // 2ms yield — keeps CPU responsive for other tasks
+    usleep(15000); // 15ms yield — gives GPU breathing room so macOS UI stays responsive
   }
   printf("\n");
   if(solved){
