@@ -971,6 +971,7 @@ let randomColliders145 = [
   {presentage: "65.80432506", hex: "0x2e8d8fab7ec95eae3633c3a6de50adc2707d29"},
   {presentage: "58.57795164", hex: "0x2995b8306852a4bd8f1734a4f84779e721b77b"},
   {presentage: "63.08073309", hex: "0x2cae3582961ce263e2d3745bc77c0000abcc37"},
+<<<<<<< Updated upstream
   {presentage: "86.00281076", hex: "0x3c707ea44010bc3ad944d54719c4f81728654e"},
   {presentage: "38.97778927", hex: "0x1c1c1745fa353aca564fedd40377d9ab5786fe"},
   {presentage: "27.28636438", hex: "0x1412666efa33b83e4a6883f7f1be9eb6b9e5cf"},
@@ -979,4 +980,9 @@ let randomColliders145 = [
   {presentage: "38.85522072", hex: "0x1c0684d3237e09704130a1de619fad2ef7ba0f"},
   {presentage: "17.12154577", hex: "0xd15645dc0249dc420abc718adcbd5abee85c8"},
   {presentage: "97.20086058", hex: "0x442359f96b3b6256b746d3a4017c81dbb7cbd3"},
+=======
+
+  {presentage: "53.30259703", hex: "0x25f541cfd10e2506ca9f75fc8678d57ecd0f5d"},
+  {presentage: "5.84555344", hex: "0x554d1417ba05f5b8536e112a9fbbc796d7f2e"},
+>>>>>>> Stashed changes
 ]
