@@ -965,4 +965,8 @@ let randomColliders155 = [
   {presentage: "17.63675056", hex: "0x1cabc29b1aa319751c0bcf411b53429d33820d7a"},
   {presentage: "99.27324994", hex: "0x82b770a294eade2fcb9fa62314d7fe5936d2fa80"},
 >>>>>>> Stashed changes
+  {presentage: "11.86280881", hex: "0x1574194c37103785a84b0d448c210b1282b98338"},
+  {presentage: "76.79261063", hex: "0x669da2a9ade3d3798f3816c7c2a1d09fc0244791"},
+  {presentage: "65.86307810", hex: "0x58f42f5ba2be0589acbc8c0ce91c8eabffcdaad7"},
+  {presentage: "53.77825604", hex: "0x49d90abc1ba4a134988e00df2310a64071095761"},
 ]

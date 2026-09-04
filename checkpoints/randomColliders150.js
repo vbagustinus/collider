@@ -970,4 +970,8 @@ let randomColliders150 = [
   {presentage: "8.11815204", hex: "0x1054ee9f04928bde451a3b6a8f3ff96a39afa39"},
   {presentage: "17.34253881", hex: "0x207975174e7b382f9c4fd758c1e30ed88af1092"},
 >>>>>>> Stashed changes
+  {presentage: "21.94411166", hex: "0x2886f6472f1393db9490c6365aaff9d848abe9f"},
+  {presentage: "59.84820673", hex: "0x6adbff2229cb80717f742972951ddee324d2ef6"},
+  {presentage: "42.03794319", hex: "0x4bb0ffa0ea45d97e0b1dc05a4da9562525a95a3"},
+  {presentage: "17.05462904", hex: "0x1ff8794b9b5eeb9dc85269af46292f235920819"},
 ]

@@ -1008,4 +1008,9 @@ let randomColliders140 = [
   {presentage: "87.82021016", hex: "0x1c219de77193c1128467026d9889cf213adda"},
   {presentage: "23.77791920", hex: "0x81e3bc903ea704bc27631b584b1ab0856e51"},
 >>>>>>> Stashed changes
+  {presentage: "59.28670418", hex: "0x1336efb39c7a1eaa0f32a2ea7b337d050e590"},
+  {presentage: "73.68570176", hex: "0x17b6db2c0b20c572657829dd491bd2c45d8de"},
+  {presentage: "10.47409420", hex: "0x3f5ed72ffd1dcd7060bb2bba98eda22f6a46"},
+  {presentage: "46.12423970", hex: "0xf19f06dd69d30270f3882278d0cc35ce17f8"},
+  {presentage: "18.37702907", hex: "0x66e298e2ba74db742f7cc54d7c8a9519d805"},
 ]
