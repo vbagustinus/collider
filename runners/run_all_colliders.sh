@@ -97,6 +97,16 @@ case "$cmd" in
     else
       rm -f "$PID_DIR"/sweep_*.pid 2>/dev/null || true
     fi
+    echo "=== pulling latest logs from cloud ==="
+    STASHED=0
+    if ! git -C "$B1000" diff --quiet 2>/dev/null || ! git -C "$B1000" diff --cached --quiet 2>/dev/null; then
+      git -C "$B1000" stash push -m "auto-stash before start-all pull" 2>&1 && STASHED=1
+    fi
+    git -C "$B1000" pull --rebase origin main 2>&1 || echo "WARN: git pull failed (proceeding anyway)"
+    if [[ "$STASHED" -eq 1 ]]; then
+      git -C "$B1000" stash pop 2>&1 || echo "WARN: stash pop had conflicts, manually resolve later"
+    fi
+
     rm -f "$STOP_FILE"
     bash "$0" --loop "$ROUND" "$KANGS" >>"$SCHED_LOG" 2>&1 < /dev/null &
     echo "$!" > "$MASTER_PID"
@@ -131,6 +141,14 @@ case "$cmd" in
       exit 1
     fi
     echo "all collider processes stopped (0 left)."
+    echo "=== pushing latest logs to cloud ==="
+    git -C "$B1000" add checkpoints/randomColliders*.js logs/*.pct_history 2>/dev/null
+    if git -C "$B1000" diff --cached --quiet 2>/dev/null; then
+      echo "no changes to commit."
+    else
+      git -C "$B1000" commit -m "sync: update checkpoints + pct_history $(date +%Y-%m-%d_%H:%M)" 2>&1 || echo "WARN: git commit failed"
+      git -C "$B1000" push origin main 2>&1 || echo "WARN: git push failed"
+    fi
     exit 0
     ;;
 
