@@ -1325,4 +1325,10 @@ let randomColliders145 = [
   {presentage: "49.19773994", hex: "0x2322cd5ee898b03a9adb8e05bcad6fe54035f4"},
   {presentage: "47.96309441", hex: "0x2249812e86503baca96bc9a7a951c874a36ace"},
 >>>>>>> ea18784 (sync: update checkpoints + pct_history 2026-09-18_02:12)
+  {presentage: "61.92259688", hex: "0x2be26086680e872c59a537dd66f8dd76e91544"},
+  {presentage: "27.25211730", hex: "0x140c5f65a64d0643102008b403a82b2cd47445"},
+  {presentage: "48.44805662", hex: "0x229edba39a23823b2e295e1d41af4cdf2bc9d7"},
+  {presentage: "2.38585192", hex: "0x2f3e8f1b107ca4ec331987e668d52b9605e62"},
+  {presentage: "34.53165131", hex: "0x190d9214d8294c54975bfcab0bdcd807be6533"},
+  {presentage: "86.27511624", hex: "0x3ca06ba326b6223b6937a70b4730ec06230466"},
 ]

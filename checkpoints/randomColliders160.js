@@ -1273,4 +1273,9 @@ let randomColliders160 = [
   {presentage: "17.76143385", hex: "0x63cea2a4db163baba7b9170d62bf11f926c7eae4a"},
   {presentage: "28.03071413", hex: "0x97275067f7601e4dc8e0af01e0aad022c2a2a75d9"},
 >>>>>>> ea18784 (sync: update checkpoints + pct_history 2026-09-18_02:12)
+  {presentage: "26.24356046", hex: "0x8e37c1e43b7e5b4fb1eefaf4fe443e1d7200ce5a7"},
+  {presentage: "67.17057566", hex: "0x15ada563b75f7d3e194042e62e9da23cd64a24103d"},
+  {presentage: "91.77945738", hex: "0x1d5e5b49822a114b81de91f12eabe4f5b87e612e93"},
+  {presentage: "6.68714059", hex: "0x2c6f8a3a81054e1d9a44ba44340c7706c79a5de44"},
+  {presentage: "57.00418968", hex: "0x128055cdfd4e74d81931296db7937fa4250dd6821f"},
 ]
