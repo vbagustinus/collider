@@ -4,6 +4,19 @@ Repo ini dijalankan oleh BEBERAPA KOMPUTER sekaligus dan disinkronkan lewat
 GitHub. File ini adalah kesepakatan antar mesin: ikuti aturannya agar progress
 saling melengkapi, tidak saling menginjak, dan tidak hilang.
 
+## root_agents.md — konteks project utuh (WAJIB dibaca AI)
+File `root_agents.md` di root folder repo ini adalah salinan dari AGENTS.md
+induk yang ada di folder DI ATAS repo (`../AGENTS.md` — berisi konvensi
+project keseluruhan: alamat target, hardware, etika, daftar semua tools).
+Perintah untuk AI:
+1. SEBELUM keputusan lintas-repo (hardware, alamat, prioritas, tools), baca
+   `root_agents.md` di root folder repo ini — bukan cuma file ini.
+2. JANGAN edit `root_agents.md` langsung. Single source of truth =
+   `../AGENTS.md`. Kalau `root_agents.md` dirasa kadaluarsa, perbarui dengan:
+   `cp ../AGENTS.md root_agents.md` lalu commit + push via sync helper.
+3. Saat fresh clone di mesin baru, `root_agents.md` ikut ter-download otomatis
+   (terlacak git) — AI langsung punya konteks penuh tanpa akses ke mesin lain.
+
 ## Tujuan project
 - Sweep collider kangaroo (Metal GPU) untuk puzzle BTC p140/p145/p150/p155/p160
   via config `collider_jump_*_rnd.conf` (ENABLED=1). Master:
