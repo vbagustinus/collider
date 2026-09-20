@@ -224,6 +224,11 @@ def main():
         if hash160(derived_pub).hex() != tgt.lower():
             raise SystemExit(f"ERROR: private key derives hash160 != TARGET_HASH160 ({tgt}) -> invalid MATCH, abort sweep")
         print("[sweep] MATCH VALID: priv -> PUBKEY -> TARGET_HASH160 verified OK")
+    else:
+        # Anti-zonk: selalu WAJIB ada anchor verifikasi. Kalau config tanpa
+        # TARGET_HASH160, cek pertama di atas sudah membuktikan config PUBKEY
+        # = bentuk compressed/uncompressed dari priv ini — cukup sebagai bukti.
+        print("[sweep] MATCH VALID: priv -> config PUBKEY verified OK (tanpa TARGET_HASH160 di config)")
 
     print(f"[sweep] sweep destination = {args.sweep}")
     try:

@@ -245,11 +245,15 @@ while :; do
   _IN_ROUND=0
   if [[ "$rc" -eq 0 ]]; then
     echo "=== [$name] SOLVED rc=0 at START_PCT=${PCT}% ==="
-    if [[ -s "$log" ]]; then
+    # ANTI-ZONK: rc=0 juga terjadi saat round timeout NORMAL. Notifikasi MATCH
+    # hanya boleh bunyi kalau binary benar-benar mencetak 'SOLVED k = <hex>'.
+    SOLVED_LINE="$(grep -m1 'SOLVED k =' "$log" 2>/dev/null)"
+    if [[ -n "$SOLVED_LINE" ]]; then
       osascript -e "display notification \"metal-kangaroo ${name} MATCH at ${PCT}% - check ${log}\" with title \"Kangaroo MATCH\"" 2>/dev/null
+    else
+      echo "[round] rc=0 tanpa 'SOLVED k =' (timeout normal) — bukan match."
     fi
     # ---- auto-sweep: if a private key was found, move the BTC to SWEEP_ADDRESS ----
-    SOLVED_LINE="$(grep -m1 'SOLVED k =' "$log" 2>/dev/null)"
     if [[ -n "$SOLVED_LINE" ]]; then
       PRIV="$(echo "$SOLVED_LINE" | sed -nE 's/.*SOLVED k = ([0-9a-fA-F]+).*/\1/p')"
       if [[ -n "$PRIV" ]]; then
