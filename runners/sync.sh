@@ -53,13 +53,15 @@ _col_log() { echo "[$(date +%FT%T)] [sync] $*"; }
 
 # ---- lock -----------------------------------------------------------------
 # One lock dir shared by sync_pull and sync_pull+push cycles. Contains `pid`
-# with the owner's $BASHPID. NOTE: $BASHPID, not $$ — inside the daemon's
-# ( ... ) & subshell $$ is the PARENT pid, which may already be gone; that
-# would make a live lock look stale and break serialization.
-# Stale detection: owner pid dead => remove; or lock older than 600s (covers
-# pid reuse and a crash before the pid file was written).
+# with the owner's process id. PORTABLE pid: macOS /bin/bash 3.2 has no
+# $BASHPID (bash>=4) — under `set -u` that explodes with "unbound variable"
+# and kills e.g. the stop-all final flush. Trick: `sh -c 'echo $PPID'` gives
+# the CALLER's pid on every bash version, also inside daemon subshells where
+# $$ still points at the long-gone parent. Stale detection: owner pid dead =>
+# remove; or lock older than 600s (covers pid reuse and a crash before the
+# pid file was written).
 _col_lock_take() { # $1 = timeout seconds; return 0 if lock acquired
-  local lock="$COL_ROOT/.git/sync_push.lock" waited=0 owner owner2 mtime age
+  local lock="$COL_ROOT/.git/sync_push.lock" waited=0 owner owner2 mtime age mypid
   until mkdir "$lock" 2>/dev/null; do
     owner=$(cat "$lock/pid" 2>/dev/null)
     if [[ -n "$owner" ]] && ! kill -0 "$owner" 2>/dev/null; then
@@ -80,7 +82,9 @@ _col_lock_take() { # $1 = timeout seconds; return 0 if lock acquired
     sleep 1; waited=$((waited+1))
     if (( waited >= $1 )); then return 1; fi
   done
-  echo "$BASHPID" > "$lock/pid"
+  mypid=$(sh -c 'echo $PPID' 2>/dev/null)
+  [[ "$mypid" =~ ^[0-9]+$ ]] || mypid=$$
+  echo "$mypid" > "$lock/pid"
   return 0
 }
 _col_lock_release() { rm -rf "$COL_ROOT/.git/sync_push.lock" 2>/dev/null; }
