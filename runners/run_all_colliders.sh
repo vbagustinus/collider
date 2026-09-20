@@ -111,7 +111,8 @@ case "$cmd" in
     fi
 
     rm -f "$STOP_FILE"
-    bash "$0" --loop "$ROUND" "$KANGS" >>"$SCHED_LOG" 2>&1 < /dev/null &
+    # nohup wajib: tanpa ini master mati saat sesi shell peluncur berakhir (SIGHUP).
+    nohup bash "$0" --loop "$ROUND" "$KANGS" >>"$SCHED_LOG" 2>&1 < /dev/null &
     echo "$!" > "$MASTER_PID"
     disown 2>/dev/null || true
     sleep 1
