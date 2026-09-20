@@ -88,31 +88,67 @@ PY
 
 # ---- pull ----------------------------------------------------------------
 sync_pull() {
-  local stashed=0 n0 n1
+  # Managed progress paths that EXIST right now. A pathspec containing a glob
+  # that matches NOTHING (e.g. logs/FOUND_*.txt before any find) makes the
+  # whole 'git stash push' FAIL — stashing zero files (same trap as git add).
+  local paths=() f n0 n1 pushed=0 attempt ok=0 err="" dirty=0
+  for f in "$COL_ROOT"/checkpoints/randomColliders*.js \
+           "$COL_ROOT"/logs/*.pct_history \
+           "$COL_ROOT"/logs/FOUND_*.txt; do
+    [[ -f "$f" ]] && paths+=("${f#"$COL_ROOT"/}")
+  done
   # stash ONLY managed progress files — never the user's code edits.
-  # NOTE: paths are anchored to the REPO ROOT (git -C), and in this repo
-  # progress lives under collider/.
   # Compare stash-list count before/after: 'stash push' exits 0 even when it
   # saves nothing, and popping then could pop a PRE-EXISTING user stash.
   n0=$($COL_GIT stash list 2>/dev/null | wc -l | tr -d ' ')
-  $COL_GIT stash push -m "sync: auto-stash progress before pull $(date +%FT%T)" \
-      -- checkpoints logs/FOUND_*.txt logs/*.pct_history >/dev/null 2>&1
-  n1=$($COL_GIT stash list 2>/dev/null | wc -l | tr -d ' ')
-  [[ "$n1" -gt "$n0" ]] && stashed=1
-  if ! $COL_GIT pull --rebase origin main >/dev/null 2>&1; then
-    if ! $COL_GIT diff --quiet 2>/dev/null || ! $COL_GIT diff --cached --quiet 2>/dev/null; then
-      _col_log "pull skipped: uncommitted code changes present (progress stashed; code untouched)"
+  if (( ${#paths[@]} > 0 )); then
+    $COL_GIT stash push -m "sync: auto-stash progress before pull $(date +%FT%T)" \
+        -- "${paths[@]}" >/dev/null 2>&1
+    n1=$($COL_GIT stash list 2>/dev/null | wc -l | tr -d ' ')
+    (( n1 > n0 )) && pushed=1
+  fi
+  # pull --rebase, up to 3 attempts: active runners keep appending progress
+  # between our stash and the pull, briefly dirtying the tree again.
+  for attempt in 1 2 3; do
+    dirty=0
+    $COL_GIT diff --quiet 2>/dev/null || dirty=1
+    $COL_GIT diff --cached --quiet 2>/dev/null || dirty=1
+    if (( dirty && ${#paths[@]} > 0 )); then
+      # re-stash what the runners just wrote (managed progress files only)
+      $COL_GIT stash push -m "sync: auto-stash progress before pull (retry $attempt) $(date +%FT%T)" \
+          -- "${paths[@]}" >/dev/null 2>&1
+      n1=$($COL_GIT stash list 2>/dev/null | wc -l | tr -d ' ')
+      (( n1 > n0 )) && pushed=1
+    fi
+    if err="$($COL_GIT pull --rebase origin main 2>&1 >/dev/null)"; then ok=1; break; fi
+    sleep 2
+  done
+  if (( ! ok )); then
+    if (( dirty )); then
+      _col_log "pull skipped: tree masih kotor (runners menulis progress terus); err: ${err:0:140}"
     else
-      _col_log "WARN: pull failed (offline?); continuing with local state"
+      _col_log "WARN: pull gagal (offline?): ${err:0:140}"
     fi
   fi
-  if [[ "$stashed" -eq 1 ]]; then
-    $COL_GIT stash pop >/dev/null 2>&1 || _col_log "WARN: stash pop had conflicts; resolve manually with 'git -C $COL_ROOT status'"
-  fi
+  # restore exactly the stash entries WE created (LIFO), never user stashes
+  while (( $($COL_GIT stash list 2>/dev/null | wc -l | tr -d ' ') > n0 )); do
+    $COL_GIT stash pop >/dev/null 2>&1 || {
+      _col_log "WARN: stash pop conflict; cek 'git -C $COL_ROOT stash list'"
+      break
+    }
+  done
   sync_normalize
   # normalization may itself change files — commit that quietly so the tree
-  # stays clean for the next pull.
-  $COL_GIT add checkpoints logs 2>/dev/null
+  # stays clean for the next pull. Stage ONLY managed progress files.
+  (
+    shopt -s nullglob
+    cand=( "$COL_ROOT"/checkpoints/randomColliders*.js \
+           "$COL_ROOT"/logs/*.pct_history \
+           "$COL_ROOT"/logs/FOUND_*.txt )
+    files=()
+    for f in "${cand[@]}"; do [[ -f "$f" ]] && files+=("$f"); done
+    (( ${#files[@]} > 0 )) && $COL_GIT add -- "${files[@]}"
+  )
   if ! $COL_GIT diff --cached --quiet 2>/dev/null; then
     $COL_GIT commit -m "sync: normalize checkpoints after pull $(date +%FT%T)" >/dev/null 2>&1 || true
   fi
