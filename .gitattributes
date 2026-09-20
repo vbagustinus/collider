@@ -5,3 +5,4 @@
 checkpoints/randomColliders*.js merge=progressUnion
 logs/*.pct_history merge=progressUnion
 logs/FOUND_*.txt merge=progressUnion
+KEYFOUNDKEYFOUND.txt merge=union

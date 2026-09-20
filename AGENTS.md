@@ -72,6 +72,10 @@ Perintah untuk AI:
   (di-gitignore, salin manual antar mesin). Tanpa file itu semua tetap jalan,
   hanya tanpa alert HP. Saat PULL: FOUND bertambah = mesin lain menang →
   alert lokal + HP otomatis.
+- BACKUP LEDGER TEMUAN (2026-09-21): `KEYFOUNDKEYFOUND.txt` di root project =
+  single source hasil temuan; di-mirror otomatis ke repo ini (ter-push) tiap
+  siklus push (dedup + idempoten, merge=union anti-konflik antar mesin).
+  JANGAN edit mirror manual — sumbernya root; jangan tambah baris duplikat.
 - Kalau pull --rebase nyangkut saat ada commit "sync: ..." murni: abort →
   `reset --soft origin/main` → SATU commit fresh union semua → push.
 

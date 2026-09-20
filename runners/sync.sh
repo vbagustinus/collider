@@ -211,6 +211,36 @@ _col_foreign_match_alert() {
   return 0
 }
 
+# ---- findings ledger mirror -------------------------------------------------
+# BACKUP TEMUAN (anti-kehilangan SSD): KEYFOUNDKEYFOUND.txt di root project
+# (single source hasil temuan) di-mirror ke repo INI (repo TER-PUSH) tiap
+# siklus push. Push instan saat MATCH menjamin baris baru sampai ke cloud
+# dalam hitungan detik; mirror menjaga kunci tidak pernah cuma ada di satu disk.
+_col_mirror_findings_ledger() {
+  local src="$COL_ROOT/../KEYFOUNDKEYFOUND.txt" dst="$COL_ROOT/KEYFOUNDKEYFOUND.txt"
+  [[ -f "$src" ]] || return 0
+  [[ -f "$dst" ]] || : > "$dst"
+  local h0 h1
+  h0="$($COL_GIT hash-object "$dst" 2>/dev/null)"
+  if [[ -s "$src" ]]; then
+    if [[ ! -s "$dst" ]]; then
+      cat "$src" >> "$dst"          # grep -f dgn pattern-file KOSONG = no match!
+    else
+      # append HANYA baris yang belum ada di mirror (grep -FxF = exact-line)
+      grep -FxFf "$dst" "$src" >> "$dst" 2>/dev/null || true
+    fi
+  fi
+  # dedup baris persis (union-merge antar mesin bisa menghasilkan duplikat),
+  # urutan dipertahankan — file kecil, murah, idempoten.
+  awk '!seen[$0]++' "$dst" > "$dst.tmp" 2>/dev/null && mv "$dst.tmp" "$dst"
+  h1="$($COL_GIT hash-object "$dst" 2>/dev/null)"
+  [[ -z "$h0" || "$h0" == "$h1" ]] && return 0
+  $COL_GIT add KEYFOUNDKEYFOUND.txt
+  $COL_GIT commit -m "ledger: mirror temuan dari root KEYFOUNDKEYFOUND.txt $(date +%Y-%m-%d_%H:%M)" >/dev/null 2>&1 || true
+  _col_log "KEYFOUNDKEYFOUND.txt root di-mirror ke repo (backup ter-push)."
+  return 0
+}
+
 # ---- pull ----------------------------------------------------------------
 sync_pull() {
   # serialisasi dulu: sync_pull & sync_push tidak boleh jalan bareng —
@@ -303,7 +333,8 @@ sync_pull() {
     shopt -s nullglob
     cand=( "$COL_ROOT"/checkpoints/randomColliders*.js \
            "$COL_ROOT"/logs/*.pct_history \
-           "$COL_ROOT"/logs/FOUND_*.txt )
+           "$COL_ROOT"/logs/FOUND_*.txt \
+           "$COL_ROOT"/KEYFOUNDKEYFOUND.txt )
     files=()
     for f in "${cand[@]}"; do [[ -f "$f" ]] && files+=("$f"); done
     (( ${#files[@]} > 0 )) && $COL_GIT add -- "${files[@]}"
@@ -330,6 +361,7 @@ sync_push() {
     return 0
   fi
   _col_root_agents_refresh
+  _col_mirror_findings_ledger
   sync_normalize
   # stage only files that actually exist — a git add whose pathspec matches
   # NOTHING (e.g. no FOUND_*.txt yet) aborts entirely, staging zero files.
@@ -337,7 +369,8 @@ sync_push() {
     shopt -s nullglob
     cand=( "$COL_ROOT"/checkpoints/randomColliders*.js \
            "$COL_ROOT"/logs/*.pct_history \
-           "$COL_ROOT"/logs/FOUND_*.txt )
+           "$COL_ROOT"/logs/FOUND_*.txt \
+           "$COL_ROOT"/KEYFOUNDKEYFOUND.txt )
     files=()
     for f in "${cand[@]}"; do [[ -f "$f" ]] && files+=("$f"); done
     (( ${#files[@]} > 0 )) && $COL_GIT add -- "${files[@]}"
