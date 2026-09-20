@@ -91,7 +91,7 @@ sync_pull() {
   # Managed progress paths that EXIST right now. A pathspec containing a glob
   # that matches NOTHING (e.g. logs/FOUND_*.txt before any find) makes the
   # whole 'git stash push' FAIL — stashing zero files (same trap as git add).
-  local paths=() f n0 n1 pushed=0 attempt ok=0 err="" dirty=0
+  local paths=() f n0 n1 pushed=0 attempt ok=0 err="" dirty=0 merged=0
   for f in "$COL_ROOT"/checkpoints/randomColliders*.js \
            "$COL_ROOT"/logs/*.pct_history \
            "$COL_ROOT"/logs/FOUND_*.txt; do
@@ -121,11 +121,28 @@ sync_pull() {
       (( n1 > n0 )) && pushed=1
     fi
     if err="$($COL_GIT pull --rebase origin main 2>&1 >/dev/null)"; then ok=1; break; fi
+    # FALLBACK: tree kotor karena file NON-progress (kode/config) tidak bisa
+    # di-stash oleh kita. pull --rebase menolak jalan selamanya -> gunakan
+    # merge --autostash (union driver menangani overlap progress tanpa
+    # konflik; rebase multi sync-commit rawan nyangkut, lihat AGENTS.md).
+    if [[ "$err" == *"unstaged changes"* ]] && (( attempt == 3 )); then
+      merged=1
+      if $COL_GIT pull --no-rebase --autostash origin main >/dev/null 2>&1; then
+        ok=1
+        _col_log "pull via merge --autostash (tree kotor non-progress)."
+        break
+      fi
+      $COL_GIT merge --abort >/dev/null 2>&1 || true   # jangan tinggalkan state merge
+    fi
     sleep 2
   done
   if (( ! ok )); then
     if (( dirty )); then
-      _col_log "pull skipped: tree masih kotor (runners menulis progress terus); err: ${err:0:140}"
+      if (( merged )); then
+        _col_log "WARN: merge --autostash fallback gagal; err: ${err:0:140}"
+      else
+        _col_log "pull skipped: tree masih kotor (runners menulis progress terus); err: ${err:0:140}"
+      fi
     else
       _col_log "WARN: pull gagal (offline?): ${err:0:140}"
     fi
