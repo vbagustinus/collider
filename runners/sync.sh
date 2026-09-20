@@ -401,3 +401,34 @@ sync_daemon_stop() {
   # final flush on shutdown
   sync_push
 }
+
+# ---- CLI --------------------------------------------------------------------
+# `bash runners/sync.sh <perintah>` — sync manual TANPA perlu start-all dulu.
+# KRITIS utk fresh clone: sourcing file ini otomatis register driver union
+# (blok atas), jadi pull manual pun bebas konflik marker di file progress.
+# AI/mesin lain: INI cara sync yang benar — bukan `git pull` telanjang.
+sync_main() {
+  local cmd="${1:-status}"
+  case "$cmd" in
+    pull)        sync_pull ;;
+    push)        sync_push ;;
+    sync|both)   sync_pull && sync_push ;;
+    daemon-stop) sync_daemon_stop ;;
+    status)
+      $COL_GIT fetch origin --quiet 2>/dev/null || true
+      local div
+      div="$($COL_GIT rev-list --left-right --count origin/main...HEAD 2>/dev/null || echo "?\t?")"
+      _col_log "divergence (behind/ahead) = $(echo "$div" | tr '\t' '/')"
+      $COL_GIT status --short | head -5
+      ;;
+    *)
+      echo "pakai: bash runners/sync.sh [pull|push|sync|status|daemon-stop]" >&2
+      return 2
+      ;;
+  esac
+}
+# Eksekusi hanya saat DIJALANKAN langsung (bukan di-source oleh run_all_*.sh):
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  sync_main "$@"
+  exit $?
+fi

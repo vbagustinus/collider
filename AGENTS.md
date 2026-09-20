@@ -48,6 +48,38 @@ saling melengkapi, tidak saling menginjak, dan tidak hilang.
 - Kalau pull --rebase nyangkut saat ada commit "sync: ..." murni: abort →
   `reset --soft origin/main` → SATU commit fresh union semua → push.
 
+## ATURAN SYNC UNTUK AI (WAJIB di SEMUA komputer)
+AI yang bekerja di repo ini HARUS sinkron lewat helper repo, bukan git mentah.
+`bash runners/sync.sh <cmd>` otomatis: register driver union (aman utk fresh
+clone), lock anti-race, stash by-message, abort rebase tertinggal, tanpa
+prompt kredensial.
+
+| Situasi | Perintah wajib | JANGAN |
+|---|---|---|
+| Sebelum mulai kerja | `bash runners/sync.sh pull` | `git pull` telanjang |
+| Selesai edit kode/config | commit → `bash runners/sync.sh push` | `git push` telanjang |
+| Ragu soal state | `bash runners/sync.sh status` (harus 0/0) | `git reset --hard` |
+| Sync dua arah cepat | `bash runners/sync.sh sync` | — |
+| Fresh clone pertama kali | `bash runners/sync.sh sync` SEBELUM start-all | — |
+
+Detail:
+1. pull SEBELUM mulai + push SETELAH selesai. Jangan biarkan edit kode kotor
+   berhari-hari — tree kotor non-progress memicu fallback merge (jalan, tapi
+   menumpuk backlog).
+2. File progress (`checkpoints/randomColliders*.js`, `logs/*.pct_history`,
+   `FOUND_*`) TIDAK PERNAH di-resolve manual. Kalau kecap marker konflik
+   (`<<<<<<<`): jangan pilih sisi — jalankan `bash runners/sync.sh sync`
+   (union driver membersihkan marker saat merge berikutnya); kalau masih
+   tersisa, hapus HANYA baris marker tanpa menyentuh baris data, lalu commit.
+3. Konflik di file KODE (bukan progress): resolve manual biasa seperti repo
+   git pada umumnya.
+4. Error `pull skipped: tree masih kotor` berulang = ada file kode belum
+   di-commit. Commit dulu — jangan stash paksa, jangan biarkan mengendap.
+5. SETELAH `stop-all`: final flush sudah otomatis; verifikasi dengan
+   `bash runners/sync.sh status` → harus `0/0`. Tidak perlu push manual lagi.
+6. Daemon sync (start-all) menangani siklus biasa; CLI di atas untuk saat
+   daemon mati, kerja manual, atau darurat.
+
 ## Batas hardware (default MacBook M2 16GB — sesuaikan di mesin lain)
 - 1 GPU process untuk sweep Metal (jangan dobel master di mesin yang sama).
 - Mesin RAM 16GB: jangan jalankan keyhunt CPU 7-worker + collider Metal
