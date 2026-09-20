@@ -89,6 +89,28 @@ _col_lock_take() { # $1 = timeout seconds; return 0 if lock acquired
 }
 _col_lock_release() { rm -rf "$COL_ROOT/.git/sync_push.lock" 2>/dev/null; }
 
+# ---- root_agents.md auto-refresh -------------------------------------------
+# "Kebiasaan otomatis": root_agents.md (snapshot AGENTS.md induk project)
+# di-refresh dari ../AGENTS.md tiap siklus push — kalau file induk berubah,
+# snapshot ikut commit sync berikutnya tanpa langkah manual.
+# Syarat: repo ini clone sebelahan dgn repo lain + AGENTS.md induk ada di
+# atasnya. Kalau tidak, skip diam-diam (snapshot terakhir tetap valid; mesin
+# yang punya layout sibling akan mem-push versi terbaru ke cloud).
+_col_root_agents_refresh() {
+  local up="$COL_ROOT/../AGENTS.md" dst="$COL_ROOT/root_agents.md"
+  [[ -f "$up" ]] || return 0
+  [[ -f "$dst" ]] || return 0
+  $COL_GIT ls-files --error-unmatch -- root_agents.md >/dev/null 2>&1 || return 0
+  cmp -s "$up" "$dst" && return 0
+  cp "$up" "$dst"
+  $COL_GIT add root_agents.md
+  if ! $COL_GIT diff --cached --quiet 2>/dev/null; then
+    $COL_GIT commit -m "root_agents.md: auto-refresh from ../AGENTS.md $(date +%Y-%m-%d_%H:%M)" >/dev/null 2>&1 || true
+    _col_log "root_agents.md di-refresh dari ../AGENTS.md (commit otomatis)."
+  fi
+  return 0
+}
+
 # Pop only OUR stash entries (message "sync: auto-stash progress before pull"),
 # topmost first, by ref — never the stack top blindly. A user stash that sits
 # above ours (or below) is never touched. Called while holding the lock, so
@@ -286,6 +308,7 @@ sync_push() {
     _col_log "another push in progress; skipping (retried on next cycle)."
     return 0
   fi
+  _col_root_agents_refresh
   sync_normalize
   # stage only files that actually exist — a git add whose pathspec matches
   # NOTHING (e.g. no FOUND_*.txt yet) aborts entirely, staging zero files.
@@ -413,6 +436,7 @@ sync_main() {
     pull)        sync_pull ;;
     push)        sync_push ;;
     sync|both)   sync_pull && sync_push ;;
+    agents)      _col_root_agents_refresh ;;
     daemon-stop) sync_daemon_stop ;;
     status)
       $COL_GIT fetch origin --quiet 2>/dev/null || true
@@ -422,7 +446,7 @@ sync_main() {
       $COL_GIT status --short | head -5
       ;;
     *)
-      echo "pakai: bash runners/sync.sh [pull|push|sync|status|daemon-stop]" >&2
+      echo "pakai: bash runners/sync.sh [pull|push|sync|agents|status|daemon-stop]" >&2
       return 2
       ;;
   esac
