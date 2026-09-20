@@ -58,8 +58,14 @@ Perintah untuk AI:
 - Rebase/merge tertinggal di-abort otomatis di awal/akhir sync_pull.
 - Push dibedakan: offline/auth vs non-FF; fallback merge --autostash saat tree
   kotor non-progress (file kode belum di-commit — commit dulu!).
-- Daemon sync tiap 300s, tanpa prompt kredensial (ssh BatchMode). Kalau ssh-mu
-  butuh passphrase, aktifkan ssh-agent SEBELUM start-all.
+- Daemon sync tiap 30 MENIT (default `COL_SYNC_PUSH_S:-1800`, sejak 2026-09-21):
+  tarik progress mesin lain + cek MATCH tanpa spam commit. Override via env
+  (`COL_SYNC_PUSH_S=60`) bila perlu siklus cepat. Tanpa prompt kredensial
+  (ssh BatchMode) — aktifkan ssh-agent SEBELUM start-all kalau ssh butuh passphrase.
+- ANTI-ZONK MATCH: notifikasi hanya bunyi kalau log berisi 'SOLVED k = <hex>'
+  (rc=0 saat timeout normal TIDAK dianggap match). `tools/sweep/sweep.py`
+  verifikasi priv→pubkey→hash160 SEBELUM kirim dana (offline-safe) — MATCH
+  palsu mustahil lolos sweep. FOUND file = hasil kerja semua mesin, ter-push via git.
 - Kalau pull --rebase nyangkut saat ada commit "sync: ..." murni: abort →
   `reset --soft origin/main` → SATU commit fresh union semua → push.
 
