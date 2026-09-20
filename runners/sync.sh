@@ -191,6 +191,26 @@ PY
   return 0
 }
 
+# ---- foreign-match alert ----------------------------------------------------
+# RELAY MATCH (lapis 3): kalau FOUND_*.txt bertambah baris setelah pull =
+# MESIN LAIN menemukan kunci. Alert lokal + HP (kalau topik ntfy diset).
+# Penanda lokal .col_found_seen = runtime state (gitignored).
+_col_foreign_match_alert() {
+  local seen_file="$COL_ROOT/logs/.col_found_seen" total=0 f prev
+  for f in "$COL_ROOT"/logs/FOUND_*.txt; do
+    [[ -f "$f" ]] && total=$(( total + $(grep -c . "$f" 2>/dev/null || echo 0) ))
+  done
+  if [[ -f "$seen_file" ]]; then
+    prev="$(cat "$seen_file" 2>/dev/null || echo 0)"
+    if (( total > prev )); then
+      _col_log "*** MESIN LAIN MENANG: FOUND bertambah (${prev} -> ${total} baris) — cek logs/FOUND_*.txt ***"
+      bash "$COL_ROOT/tools/notify_match.sh" "MATCH dari mesin lain!" "FOUND bertambah: ${prev} -> ${total}. Cek logs/FOUND_*.txt" >/dev/null 2>&1
+    fi
+  fi
+  echo "$total" > "$seen_file"
+  return 0
+}
+
 # ---- pull ----------------------------------------------------------------
 sync_pull() {
   # serialisasi dulu: sync_pull & sync_push tidak boleh jalan bareng —
@@ -298,6 +318,7 @@ sync_pull() {
     _col_log "WARN: ada file UNMERGED (UU) — sisa konflik autostash/merge di file non-progress."
     _col_log "      pulihkan manual: resolve file → 'git add <file>' → lanjutkan/abort operasi → 'git stash drop' entry 'autostash'."
   fi
+  _col_foreign_match_alert
   _col_lock_release
   return 0
 }

@@ -66,6 +66,12 @@ Perintah untuk AI:
   (rc=0 saat timeout normal TIDAK dianggap match). `tools/sweep/sweep.py`
   verifikasi priv→pubkey→hash160 SEBELUM kirim dana (offline-safe) — MATCH
   palsu mustahil lolos sweep. FOUND file = hasil kerja semua mesin, ter-push via git.
+- RELAY MATCH INSTAN (2026-09-21): saat MATCH → `sync.sh push` seketika + alert
+  HP via ntfy.sh. Setup per mesin: install app "ntfy" di HP → subscribe satu
+  topik rahasia yg SAMA antar mesin → `echo topik > tools/notify/NTFY_TOPIC`
+  (di-gitignore, salin manual antar mesin). Tanpa file itu semua tetap jalan,
+  hanya tanpa alert HP. Saat PULL: FOUND bertambah = mesin lain menang →
+  alert lokal + HP otomatis.
 - Kalau pull --rebase nyangkut saat ada commit "sync: ..." murni: abort →
   `reset --soft origin/main` → SATU commit fresh union semua → push.
 

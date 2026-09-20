@@ -20,3 +20,6 @@ __pycache__/
 *.pyc
 .agents/
 .utim_tmp/
+
+# ntfy topic (secret) — jangan pernah ter-push
+tools/notify/NTFY_TOPIC
