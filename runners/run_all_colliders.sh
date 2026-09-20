@@ -98,6 +98,9 @@ case "$cmd" in
       rm -f "$PID_DIR"/sweep_*.pid 2>/dev/null || true
     fi
     echo "=== pulling latest logs from cloud ==="
+    # Driver union utk file progress (idempotent) supaya pull --rebase antar
+    # mesin tidak pernah konflik di checkpoints/*.js + logs/*.pct_history.
+    git -C "$B1000" config merge.progressUnion.driver "python3 '$B1000/tools/merge_progress_union.py' %O %A %B"
     STASHED=0
     if ! git -C "$B1000" diff --quiet 2>/dev/null || ! git -C "$B1000" diff --cached --quiet 2>/dev/null; then
       git -C "$B1000" stash push -m "auto-stash before start-all pull" 2>&1 && STASHED=1
@@ -142,13 +145,25 @@ case "$cmd" in
     fi
     echo "all collider processes stopped (0 left)."
     echo "=== pushing latest logs to cloud ==="
+    # Driver union (idempotent), sama seperti start-all.
+    git -C "$B1000" config merge.progressUnion.driver "python3 '$B1000/tools/merge_progress_union.py' %O %A %B"
     git -C "$B1000" add checkpoints/randomColliders*.js logs/*.pct_history 2>/dev/null
-    if git -C "$B1000" diff --cached --quiet 2>/dev/null; then
-      echo "no changes to commit."
-    else
+    if ! git -C "$B1000" diff --cached --quiet 2>/dev/null; then
       git -C "$B1000" commit -m "sync: update checkpoints + pct_history $(date +%Y-%m-%d_%H:%M)" 2>&1 || echo "WARN: git commit failed"
-      git -C "$B1000" push origin main 2>&1 || echo "WARN: git push failed"
     fi
+    # Integrasi remote dulu (progress append-only => rebase + union aman).
+    # --autostash: toleransi file lain yang belum di-commit saat stop-all.
+    if ! git -C "$B1000" pull --rebase --autostash origin main 2>&1; then
+      echo "WARN: git pull --rebase failed (push mungkin tetap ditolak)"
+    fi
+    # Retry: kalau masih fetch-first, pull lagi lalu push (max 3x).
+    PUSHED=0
+    for _try in 1 2 3; do
+      if git -C "$B1000" push origin main 2>&1; then PUSHED=1; break; fi
+      echo "  push rejected (attempt $_try) — re-pulling remote..."
+      git -C "$B1000" pull --rebase --autostash origin main 2>&1 || break
+    done
+    [[ "$PUSHED" -eq 1 ]] || echo "WARN: git push failed setelah retry"
     exit 0
     ;;
 

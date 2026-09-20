@@ -1,0 +1,5 @@
+# File progress collider bersifat append-only -> merge pakai driver union khusus
+# (tools/merge_progress_union.py, dipasang otomatis oleh run_all_colliders.sh)
+# supaya pull --rebase antar mesin tidak pernah konflik & tidak ada progress hilang.
+checkpoints/randomColliders*.js merge=progressUnion
+logs/*.pct_history merge=progressUnion
