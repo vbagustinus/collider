@@ -12,8 +12,10 @@ Perintah untuk AI:
 1. SEBELUM keputusan lintas-repo (hardware, alamat, prioritas, tools), baca
    `root_agents.md` di root folder repo ini — bukan cuma file ini.
 2. JANGAN edit `root_agents.md` langsung. Single source of truth =
-   `../AGENTS.md`. Kalau `root_agents.md` dirasa kadaluarsa, perbarui dengan:
-   `cp ../AGENTS.md root_agents.md` lalu commit + push via sync helper.
+   `../AGENTS.md`. Snapshot ini OTOMATIS ter-refresh: tiap push di repo ini
+   (fungsi sync.sh) dan tiap commit di project root (tools/sync_root_agents.sh
+   + post-commit hook). Manual fallback: `cp ../AGENTS.md root_agents.md` lalu
+   commit + push via sync helper.
 3. Saat fresh clone di mesin baru, `root_agents.md` ikut ter-download otomatis
    (terlacak git) — AI langsung punya konteks penuh tanpa akses ke mesin lain.
 
