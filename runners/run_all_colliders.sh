@@ -26,6 +26,9 @@ MASTER_PID="$PID_DIR/sweep_master.pid"
 STOP_FILE="$PID_DIR/sweep_STOP"
 SCHED_LOG="$LOG_DIR/sweep_scheduler.log"
 
+# shared git sync helpers (sync_pull / sync_push / sync_daemon / sync_daemon_stop)
+source "$B1000/runners/sync.sh"
+
 cmd="${1:-status}"
 
 get_field() { grep -iE "^$1=" "$2" | head -1 | cut -d= -f2- | tr -d ' \r'; }
@@ -97,18 +100,12 @@ case "$cmd" in
     else
       rm -f "$PID_DIR"/sweep_*.pid 2>/dev/null || true
     fi
-    echo "=== pulling latest logs from cloud ==="
-    # Driver union utk file progress (idempotent) supaya pull --rebase antar
-    # mesin tidak pernah konflik di checkpoints/*.js + logs/*.pct_history.
-    git -C "$B1000" config merge.progressUnion.driver "python3 '$B1000/tools/merge_progress_union.py' %O %A %B"
-    STASHED=0
-    if ! git -C "$B1000" diff --quiet 2>/dev/null || ! git -C "$B1000" diff --cached --quiet 2>/dev/null; then
-      git -C "$B1000" stash push -m "auto-stash before start-all pull" 2>&1 && STASHED=1
-    fi
-    git -C "$B1000" pull --rebase origin main 2>&1 || echo "WARN: git pull failed (proceeding anyway)"
-    if [[ "$STASHED" -eq 1 ]]; then
-      git -C "$B1000" stash pop 2>&1 || echo "WARN: stash pop had conflicts, manually resolve later"
-    fi
+    # --- git sync: pull latest progress from cloud, then keep syncing while running ---
+    # sync.sh registers the progressUnion driver (idempotent), pulls with a
+    # progress-only stash, and starts the periodic two-way sync daemon.
+    echo "=== pulling latest progress from cloud ==="
+    sync_pull
+    sync_daemon
 
     rm -f "$STOP_FILE"
     # nohup wajib: tanpa ini master mati saat sesi shell peluncur berakhir (SIGHUP).
@@ -145,26 +142,11 @@ case "$cmd" in
       exit 1
     fi
     echo "all collider processes stopped (0 left)."
-    echo "=== pushing latest logs to cloud ==="
-    # Driver union (idempotent), sama seperti start-all.
-    git -C "$B1000" config merge.progressUnion.driver "python3 '$B1000/tools/merge_progress_union.py' %O %A %B"
-    git -C "$B1000" add checkpoints/randomColliders*.js logs/*.pct_history 2>/dev/null
-    if ! git -C "$B1000" diff --cached --quiet 2>/dev/null; then
-      git -C "$B1000" commit -m "sync: update checkpoints + pct_history $(date +%Y-%m-%d_%H:%M)" 2>&1 || echo "WARN: git commit failed"
-    fi
-    # Integrasi remote dulu (progress append-only => rebase + union aman).
-    # --autostash: toleransi file lain yang belum di-commit saat stop-all.
-    if ! git -C "$B1000" pull --rebase --autostash origin main 2>&1; then
-      echo "WARN: git pull --rebase failed (push mungkin tetap ditolak)"
-    fi
-    # Retry: kalau masih fetch-first, pull lagi lalu push (max 3x).
-    PUSHED=0
-    for _try in 1 2 3; do
-      if git -C "$B1000" push origin main 2>&1; then PUSHED=1; break; fi
-      echo "  push rejected (attempt $_try) — re-pulling remote..."
-      git -C "$B1000" pull --rebase --autostash origin main 2>&1 || break
-    done
-    [[ "$PUSHED" -eq 1 ]] || echo "WARN: git push failed setelah retry"
+    # --- git sync: stop periodic daemon + final flush push to cloud ---
+    # sync_daemon_stop -> sync_push: normalize, commit, pull --rebase (union
+    # driver handles progress conflicts), push, retry on fetch-first.
+    echo "=== pushing final progress to cloud ==="
+    sync_daemon_stop
     exit 0
     ;;
 

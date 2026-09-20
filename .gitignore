@@ -12,9 +12,11 @@ tools/sweep/*.sweep.log
 *.o
 *.o.d
 
-# --- OS / editor junk ---
+# --- OS / editor junk / agent workspaces ---
 .DS_Store
 *~
 *.swp
 __pycache__/
 *.pyc
+.agents/
+.utim_tmp/

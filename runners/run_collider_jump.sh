@@ -205,11 +205,25 @@ append_checkpoint() {   # $1=presentage  $2=lo-hex  (call after the round ends)
 
 echo "=== [$name] random-subrange collider ${ONCE_MODE} (puzzle $PUZZLE, dp $DP_BITS, jump ${JUMP_PCT}%, ${TIME}s/round) ==="
 
-trap 'echo "[$(date +%FT%T)] stopped by user. History: $PCT_HIST"; exit 0' INT TERM
+# Flush the CURRENT (killed) round into the permanent checkpoint before exit,
+# so this machine — and other computers after git sync — never re-randomize
+# the same subrange. PCT/HEX are the live round's values (set in the loop).
+_on_stop() {
+  if [[ "${_IN_ROUND:-0}" -eq 1 && -n "${PCT:-}" && -n "${HEX:-}" ]]; then
+    # pct_history was already appended at round start; only the permanent
+    # checkpoint is missing (it is normally written after a clean round end).
+    append_checkpoint "$PCT" "$HEX" 2>/dev/null
+    echo "[$(date +%FT%T)] killed mid-round: flushed START_PCT=${PCT}% to checkpoint."
+  fi
+  echo "[$(date +%FT%T)] stopped by user. History: $PCT_HIST"
+  exit 0
+}
+trap _on_stop INT TERM
 
 while :; do
   pick_out="$(pick_random_start)"
   PCT="${pick_out%%$'\n'*}"; HEX="${pick_out#*$'\n'}"
+  _IN_ROUND=1
   echo "$PCT" >> "$PCT_HIST"
   pi=$(( 10#${PCT%%.*} * 100000000 + 10#${PCT#*.} ))
   end_int=$(( pi + jpE8 ))
@@ -228,6 +242,7 @@ while :; do
   rc=$?
   # round ended (time out OR solved): record the random start permanently.
   append_checkpoint "$PCT" "$HEX"
+  _IN_ROUND=0
   if [[ "$rc" -eq 0 ]]; then
     echo "=== [$name] SOLVED rc=0 at START_PCT=${PCT}% ==="
     if [[ -s "$log" ]]; then
@@ -238,6 +253,9 @@ while :; do
     if [[ -n "$SOLVED_LINE" ]]; then
       PRIV="$(echo "$SOLVED_LINE" | sed -nE 's/.*SOLVED k = ([0-9a-fA-F]+).*/\1/p')"
       if [[ -n "$PRIV" ]]; then
+        # FOUND file is TRACKED in git: runners/sync.sh pushes it to the cloud so
+        # every computer sees the found key (the metal log is gitignored).
+        printf '%s\n' "$PRIV" >> "$LOG_DIR/FOUND_p${PUZZLE}.txt"
         SWEEP_DONE="$B1000/tools/sweep/sweep_done.log"
         if grep -q "PUZZLE=$PUZZLE " "$SWEEP_DONE" 2>/dev/null; then
           echo "[sweep] puzzle $PUZZLE already swept (see $SWEEP_DONE); skip."
