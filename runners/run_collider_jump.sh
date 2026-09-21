@@ -127,7 +127,10 @@ RANGE = 10000000000 - jp            # max START_PCT in 1e-8 units
 if RANGE < 1: RANGE = 1
 
 def hex_at(e8):
-    x = "%x" % (S + (R * e8) // 100000000)   # same math the kernel uses
+    # FIX 2026-09-21: dulu //100000000 (bug ÷100, hex ckpt salah faktor 100 vs
+    # posisi GPU — lihat AGENTS.md §13). Denominator benar = 1e10 (e8 unit pct).
+    # Kernel GPU: startOff = 2^(n-1) * pct/100, dan START config = 2^(n-1) → S + pct×R/100.
+    x = "%x" % (S + (R * e8) // 10000000000)
     return "0x" + (x.lstrip("0") or "0")
 
 def load_ckpt():
