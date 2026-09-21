@@ -242,6 +242,12 @@ di-commit (local) kecuali dinyatakan lain.
   b) runner hex_at() kena bug ÷100: (R*e8)//1e8 seharusnya //1e10 → hex ckpt/history
      salah faktor 100 vs posisi GPU sebenarnya (bookkeeping zonk, GPU-nya sendiri ok).
   c) r24 anomali: HT=47k (harusnya ±4), DP ratio 2^-12 pdhl DP=4 → verifikasi DP path.
+  FIX BOOKKEEPING (2026-09-21, selesai): hex_at() ÷1e8→÷1e10 diperbaiki + 6.938 hex
+  ckpt diregenerasi dr pct via `collider/tools/fix_ckpt_hex.py` (idempoten, --check).
+  Round baru setelah rotasi terbukti tulis hex benar. Catatan: hex historis lama =
+  campuran beberapa formula era (ada yg bahkan di bitlen puzzle tetangga) — pct di
+  ckpt/pct_history adalah SATU-SATUNYA sumber valid. Bookkeeping benar ≠ binary
+  sehat: GPU tetap RUSAK (selftest gagal) sampai fix kernel terbukti.
   STATUS: GPU collider = TIDAK PRODUKTIF. JANGAN percaya progress % collider.
   Follow-up: fix/rewrite kernel metal (selftest HARUS pass dulu) ATAU stop GPU +
   alihkan compute ke keyhunt CPU (terbukti sehat). Baru lanjut sweep.
