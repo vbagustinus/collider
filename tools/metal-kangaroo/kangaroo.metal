@@ -191,9 +191,13 @@ inline Jac jac_add_aff(Jac p, PAFF q){
   Jac r; r.X=X3; r.Y=Y3; r.Z=Z3; return r;
 }
 // ---------------- kernelGen: compute start point d*G (+PntWild for wild) ----------------
+// fwd decls — definisi lengkap ada setelah kernelGen
+inline PAFF aff_mul_G(const uint64_t d[4]);
+inline PAFF aff_add(PAFF a, PAFF b, bool* bounced);
+
 kernel void kernelGen(device const uint64_t* startDist [[buffer(0)]],
                       device const PAFF* pntWild [[buffer(1)]],
-                      device Jac* kang [[buffer(2)]],
+                      device PAFF* kang [[buffer(2)]],
                       device uint64_t* dist [[buffer(3)]],
                       device uint64_t* histBuf [[buffer(4)]],
                       constant uint& tameCut [[buffer(5)]],
@@ -202,6 +206,20 @@ kernel void kernelGen(device const uint64_t* startDist [[buffer(0)]],
   if(tid>=kangCnt) return;
   uint64_t d[4];
   for(int i=0;i<4;i++){ d[i]=startDist[tid*4+i]; dist[tid*4+i]=d[i]; }
+  PAFF p=aff_mul_G(d);
+  if(tid>=tameCut && !(p.x.v[3]==0&&p.x.v[2]==0&&p.x.v[1]==0&&p.x.v[0]==0)){
+    bool bb=false; PAFF q=aff_add(p,pntWild[0],&bb); if(!bb) p=q;
+  }
+  kang[tid]=p;
+  histBuf[tid*16]=0;
+  for(int i=0;i<10;i++) histBuf[tid*16+1+i]=0;
+}
+
+// ---------------- main walk kernel (Jacobian — inverse only at distinguished points) ---------------
+constant uint MD = 10;
+
+// scalar -> affine point p = d*G (dipakai kernelGen & reset kang saat bounce)
+inline PAFF aff_mul_G(const uint64_t d[4]){
   Jac R; R.X=FE_ZERO; R.Y=FE_ZERO; R.Z=FE_ZERO;
   Jac Q; Q.X=GX; Q.Y=GY; Q.Z=FE_ZERO; Q.Z.v[3]=1;
   int top=255; while(top>=0 && !((d[top>>6]>>(top&63))&1ULL)) top--;
@@ -215,29 +233,43 @@ kernel void kernelGen(device const uint64_t* startDist [[buffer(0)]],
     Fe iz=fe_mul(iz2,R.Z);
     p.x=fe_mul(R.X,iz2); p.y=fe_mul(fe_mul(R.Y,iz),iz2);
   }
-  if(tid>=tameCut) p=p2_add(p,pntWild[0]);
-  Jac Jout; Jout.X=p.x; Jout.Y=p.y; Jout.Z=FE_ZERO; Jout.Z.v[3]=1;
-  kang[tid]=Jout;
-  histBuf[tid*16]=0;
-  for(int i=0;i<10;i++) histBuf[tid*16+1+i]=0;
+  return p;
 }
 
-// ---------------- main walk kernel (Jacobian — inverse only at distinguished points) ---------------
-constant uint MD = 10;
-
-inline Jac jac_fromJmp(Jmp J, bool neg){ // affine jump point -> Jacobian (Z=1), no inverse
-  Jac r;
-  r.X.v[0]=J.x[0]; r.X.v[1]=J.x[1]; r.X.v[2]=J.x[2]; r.X.v[3]=J.x[3];
-  r.Y.v[0]=J.y[0]; r.Y.v[1]=J.y[1]; r.Y.v[2]=J.y[2]; r.Y.v[3]=J.y[3];
-  r.Z=FE_ZERO; r.Z.v[3]=1;
-  if(neg) r.Y=fe_modsub(FE_ZERO, r.Y);
-  return r;
+// penjumlahan affine penuh (1 inversi): a+b. bounced=true jika a==-b (hasil infinity).
+// FIX v3: walk lama memakai koordinat Jacobian dgn indeks lompatan & negasi dari bit
+// mentah X/Y Jacobian -> trail TIDAK terdefinisi per titik kurva (tergantung
+// representasi), simetri +-y hancur, kang bisa rusak permanen lewat kasus
+// infinity yang salah tangani. Walk affine menjadikan lompatan f(x) murni +
+// tanda dari parity y affine = prasyarat simetri kangaroo yang benar.
+inline PAFF aff_add(PAFF a, PAFF b, bool* bounced){
+  *bounced=false;
+  Fe dx=fe_modsub(b.x,a.x);
+  if(fe_eq4(dx,FE_ZERO)){
+    Fe dy=fe_modsub(b.y,a.y);
+    if(fe_eq4(dy,FE_ZERO)){
+      Fe lam=fe_mul(fe_add(fe_add(a.x,a.x),a.x), fe_inv(fe_add(a.y,a.y)));
+      Fe nx=fe_modsub(fe_sqr(lam), fe_add(a.x,a.x));
+      Fe ny=fe_modsub(fe_mul(lam,fe_modsub(a.x,nx)), a.y);
+      PAFF r; r.x=nx; r.y=ny; return r;
+    }
+    *bounced=true;
+    return a;
+  }
+  Fe lam=fe_mul(fe_modsub(b.y,a.y), fe_inv(dx));
+  Fe nx=fe_modsub(fe_sqr(lam), fe_add(a.x,b.x));
+  Fe ny=fe_modsub(fe_mul(lam,fe_modsub(a.x,nx)), a.y);
+  PAFF r; r.x=nx; r.y=ny; return r;
 }
 
+// FIX v3: walk koordinat AFFINE. Versi lama memakai Jacobian dan mengambil
+// indeks lompatan/negasi dari bit mentah X/Y Jacobian -> trail tidak terdefinisi
+// per titik kurva, simetri +-y rusak, kang saling melebur (klon), recovery
+// mustahil. Walk affine: indeks = byte terendah x, tanda = parity y affine.
 kernel void kangaroo(device const Jmp* jmp1 [[buffer(0)]],
                      device const Jmp* jmp2 [[buffer(1)]],
                      device const Jmp* jmp3 [[buffer(2)]],
-                     device Jac* kang [[buffer(3)]],
+                     device PAFF* kang [[buffer(3)]],
                      device uint64_t* dist [[buffer(4)]],
                      device uint64_t* histBuf [[buffer(5)]],
                      constant uint& tameCut [[buffer(6)]],
@@ -250,49 +282,63 @@ kernel void kangaroo(device const Jmp* jmp1 [[buffer(0)]],
                      device uint64_t* dpRec [[buffer(13)]],
                      uint tid [[thread_position_in_grid]]) {
   if(tid>=kangCnt) return;
-  Jac P=kang[tid];
+  PAFF P=kang[tid];
   uint64_t d[4]; for(int i=0;i<4;i++) d[i]=dist[tid*4+i];
   uint64_t hw=histBuf[tid*16];
   uint hi=(uint)(hw&0xFFFFFFFFULL), l1s2=(uint)((hw>>32)&1ULL);
   uint64_t hist[MD]; for(int i=0;i<MD;i++) hist[i]=histBuf[tid*16+1+i];
 
   for(uint s=0;s<maxSteps;s++){
-    uint ji=(uint)(P.X.v[3]&(jmpCnt-1));
+    // indeks lompatan dari byte terendah x AFFINE — deterministik per titik kurva
+    uint ji=(uint)(P.x.v[3]&0xFFu)&(jmpCnt-1);
     device const Jmp* tab = l1s2? jmp2 : jmp1;
     Jmp J=tab[ji];
-    bool neg=(P.Y.v[3]&1)?true:false;
+    bool neg=((P.y.v[3]&1ULL)!=0ULL); // simetri +-y: y ganjil -> lompatan dinegasi
     uint jm=ji; if(neg) jm|=0x80000000u;
     PAFF Jaff; Jaff.x=fe_from_u64s(J.x); Jaff.y=fe_from_u64s(J.y);
     if(neg) Jaff.y=fe_modsub(FE_ZERO, Jaff.y);
-    Jac nP=jac_add_aff(P,Jaff);
-    if(neg) le256_sub(d,J.d); else le256_add(d,J.d);
-    // L1S2 loop detection
-    uint jn=(uint)(nP.X.v[3]&(jmpCnt-1));
-    if(!(nP.Y.v[3]&1)) jn|=0x80000000u;
-    if(l1s2) l1s2=0; else l1s2=(jm==jn);
-    // distinguished point: low dpMask bits of bits 224..255 of affine x
-    Fe ax=jac_x(nP);
-    if((((uint32_t)(ax.v[0]>>32))&dpMask)==0){
+    bool bounced=false;
+    PAFF nP=aff_add(P,Jaff,&bounced);
+    if(bounced){
+      // P == -J (sangat langka): lompatan via tabel escape jmp3 agar walk tetap jalan;
+      // jika juga bounce, langkah di-skip (invarian P<->d tetap terjaga).
+      Jmp J3=jmp3[ji];
+      PAFF J3aff; J3aff.x=fe_from_u64s(J3.x); J3aff.y=fe_from_u64s(J3.y);
+      if(neg) J3aff.y=fe_modsub(FE_ZERO, J3aff.y);
+      bool bounced2=false;
+      PAFF nP2=aff_add(P,J3aff,&bounced2);
+      if(bounced2){ nP=P; }
+      else { nP=nP2; if(neg) le256_sub(d,J3.d); else le256_add(d,J3.d); }
+    } else {
+      if(neg) le256_sub(d,J.d); else le256_add(d,J.d);
+    }
+    // L1S2 loop detection (indeks sama + parity sama — konvensi HARUS identik dgn jm)
+    uint jn=(uint)(nP.x.v[3]&0xFFu)&(jmpCnt-1);
+    if((nP.y.v[3]&1ULL)!=0ULL) jn|=0x80000000u; // FIX v3: parity GANJIL -> bit, sama spt jm
+    if(l1s2) l1s2=0; else l1s2=(jm==jn)?1u:0u;
+    // distinguished point: cek langsung pada x affine (tanpa inversi tambahan)
+    if((((uint32_t)(nP.x.v[0]>>32))&dpMask)==0){
       uint pos=atomic_fetch_add_explicit(dpCnt,1,memory_order_relaxed);
       if(pos<maxRec){
         device uint64_t* r=dpRec+(uint64_t)pos*9;
-        r[0]=ax.v[0]; r[1]=ax.v[1]; r[2]=ax.v[2]; r[3]=ax.v[3];
+        r[0]=nP.x.v[0]; r[1]=nP.x.v[1]; r[2]=nP.x.v[2]; r[3]=nP.x.v[3];
         r[4]=d[0]; r[5]=d[1]; r[6]=d[2]; r[7]=d[3];
         r[8]=tid;
       }
     }
-    // deep-loop detection (distance low64 in history) -> escape via jumps3
+    // deep-loop detection (distance low64 in history) -> escape via jmp3
     uint64_t dlow=d[0];
     bool looped=false;
     for(int k=0;k<MD;k++){ if(hist[k]==dlow){ looped=true; break; } }
     if(looped){
-      uint ji3=(uint)(nP.X.v[3]&(jmpCnt-1));
+      uint ji3=(uint)(nP.x.v[3]&0xFFu)&(jmpCnt-1);
       Jmp J3=jmp3[ji3];
-      bool neg3=(nP.Y.v[3]&1)?true:false;
+      bool neg3=((nP.y.v[3]&1ULL)!=0ULL);
       PAFF J3aff; J3aff.x=fe_from_u64s(J3.x); J3aff.y=fe_from_u64s(J3.y);
       if(neg3) J3aff.y=fe_modsub(FE_ZERO, J3aff.y);
-      nP=jac_add_aff(nP,J3aff);
-      if(neg3) le256_sub(d,J3.d); else le256_add(d,J3.d);
+      bool bounced3=false;
+      PAFF nP2=aff_add(nP,J3aff,&bounced3);
+      if(!bounced3){ nP=nP2; if(neg3) le256_sub(d,J3.d); else le256_add(d,J3.d); }
       for(int k=0;k<MD;k++) hist[k]=0;
       hi=0;
     } else {

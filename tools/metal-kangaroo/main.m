@@ -273,13 +273,15 @@ int main(int argc, char** argv){
     else if([line hasPrefix:@"START_PCT="]){ bStartPct=[[line substringFromIndex:10] doubleValue]; bUseSub=1; }
   }];
   jumpPct=bJumpPct; startPct=bStartPct; useSub=bUseSub;
-  int selftest=0, timeLimit=0; int kangs=65536;
+  int selftest=0, timeLimit=0; int kangs=65536; int traceTid=-1;
   for(int i=2;i<argc;i++){
     if(strcmp(argv[i],"--selftest")==0) selftest=1;
     else if(strcmp(argv[i],"-t")==0 && i+1<argc) timeLimit=atoi(argv[++i]);
     else if(strcmp(argv[i],"-p")==0 && i+1<argc){ startPct=atof(argv[++i]); useSub=1; }
+    else if(strcmp(argv[i],"--trace")==0 && i+1<argc) traceTid=atoi(argv[++i]);
     else if(argv[i][0]!='-') kangs=atoi(argv[i]);
   }
+  if(traceTid>=0) kangs=(traceTid+1)<2048?(traceTid+1):2048; // pool minimal utk trace
   if(selftest){ /* use Range/dpBits/kangs from config for isolation testing */ }
   if(Range<=0) Range=32;
   if(Range<10){ printf("range too small\n"); return 1; }
@@ -439,7 +441,11 @@ int main(int argc, char** argv){
   fflush(stdout);
   MTLSize thg=MTLSizeMake((NSUInteger)tgSize,1,1);
   MTLSize grid=MTLSizeMake((NSUInteger)gridW,1,1);
-  KC=(uint32_t)tgThreads; // update KC so kernels see aligned count
+  // FIX v3: tameCut harus turut disesuaikan dgn pool efektif. Versi lama menimpa
+  // TC = tgThreads — ketika kangs default 65536 > pool cap 10k, tameCut(21845) >
+  // KC -> SEMUA kang jadi tame, wild tidak pernah ada, k-recovery mustahil.
+  tameCut=(int)(tgThreads/3); if(tameCut<1) tameCut=1;
+  KC=(uint32_t)tgThreads; TC=(uint32_t)tameCut; // update KC/TC so kernels see aligned count
   // re-size startDist and kang buffers if kang count changed
   if((uint32_t)tgThreads!=(uint32_t)kangs){
     free(startDist); startDist=malloc(tgThreads*4*sizeof(uint64_t));
@@ -474,9 +480,33 @@ int main(int argc, char** argv){
     [e endEncoding]; [cb commit]; [cb waitUntilCompleted]; }
   printf("kernelGen done, starting walk...\n"); fflush(stdout);
 
+  // --- TRACE MODE: KANG_TRACE=/path --trace <tid> — dump semuanya utk replay Python ---
+  const char* trEnv=getenv("KANG_TRACE");
+  FILE* trf=NULL; int trTid=(traceTid>=0)?traceTid:0;
+  if(trEnv){
+    trf=fopen(trEnv,"w"); if(!trf){ printf("cannot open %s\n",trEnv); return 2; }
+    fprintf(trf,"tameCut %u\nkangs %u\n",TC,KC);
+    B256 sd0; le64s_to_B256(&sd0,startDist+(uint64_t)trTid*4);
+    fprintf(trf,"start_dist %08x%08x%08x%08x%08x%08x%08x%08x\n",
+      sd0.w[7],sd0.w[6],sd0.w[5],sd0.w[4],sd0.w[3],sd0.w[2],sd0.w[1],sd0.w[0]);
+    B256 twx, twy; FE_to_B256(&twx,pntWildBuf); FE_to_B256(&twy,pntWildBuf+4);
+    fprintf(trf,"wild %08x%08x%08x%08x%08x%08x%08x%08x %08x%08x%08x%08x%08x%08x%08x%08x\n",
+      twx.w[7],twx.w[6],twx.w[5],twx.w[4],twx.w[3],twx.w[2],twx.w[1],twx.w[0],
+      twy.w[7],twy.w[6],twy.w[5],twy.w[4],twy.w[3],twy.w[2],twy.w[1],twy.w[0]);
+    for(int t=0;t<3;t++) for(int i=0;i<JMP_CNT;i++){
+      B256 jd; le64s_to_B256(&jd,jt[t][i].d);
+      fprintf(trf,"jmp%d %02x ",t,i);
+      for(int j=0;j<4;j++) fprintf(trf,"%016llx ",(unsigned long long)jt[t][i].x[j]);
+      for(int j=0;j<4;j++) fprintf(trf,"%016llx ",(unsigned long long)jt[t][i].y[j]);
+      fprintf(trf,"%08x%08x%08x%08x%08x%08x%08x%08x\n",
+        jd.w[7],jd.w[6],jd.w[5],jd.w[4],jd.w[3],jd.w[2],jd.w[1],jd.w[0]);
+    }
+    fflush(trf);
+  }
+
   HTSIZE=1<<24; HT=calloc(HTSIZE,sizeof(Slot)); // 16M slots (256MB), fewer resizes
   uint32_t zero=0;
-  double t0=now_sec(); uint64_t totalOps=0; int iter=0, maxIter=selftest?40:0;
+  double t0=now_sec(); uint64_t totalOps=0; int iter=0, maxIter=selftest?1000:0; // -t tetap mengikat kalau diisi
   int solved=0; B256 foundK;
   // double-buffer: alternate DP counter/record buffers so GPU writes one
   // while CPU processes the other — eliminates idle wait between iterations.
@@ -502,6 +532,20 @@ int main(int argc, char** argv){
     [cb waitUntilCompleted];
     uint32_t cnt=*(uint32_t*)[dpCntBufs[gpuBuf] contents];
     if(cnt>maxRec) cnt=maxRec;
+    // trace: posisi kang trTid setelah iterasi ini (buffer kang = PAFF 64B/kang)
+    if(trf){
+      uint64_t* kp=(uint64_t*)(void*)[bKang contents];
+      uint64_t* dptr=(uint64_t*)(void*)[bDist contents]+(uint64_t)trTid*4;
+      B256 px,py,dv;
+      FE_to_B256(&px,kp+(uint64_t)trTid*8);       // Fe x (BE u64[4])
+      FE_to_B256(&py,kp+(uint64_t)trTid*8+4);     // Fe y
+      le64s_to_B256(&dv,dptr);
+      fprintf(trf,"pos %08x%08x%08x%08x%08x%08x%08x%08x %08x%08x%08x%08x%08x%08x%08x%08x %08x%08x%08x%08x%08x%08x%08x%08x\n",
+        px.w[7],px.w[6],px.w[5],px.w[4],px.w[3],px.w[2],px.w[1],px.w[0],
+        py.w[7],py.w[6],py.w[5],py.w[4],py.w[3],py.w[2],py.w[1],py.w[0],
+        dv.w[7],dv.w[6],dv.w[5],dv.w[4],dv.w[3],dv.w[2],dv.w[1],dv.w[0]);
+      fflush(trf);
+    }
     totalOps+=(uint64_t)KC*STEPS;
     uint64_t* rec=[dpRecBufs[gpuBuf] contents];
     for(uint32_t i=0;i<cnt;i++){
@@ -509,6 +553,36 @@ int main(int argc, char** argv){
       B256 x,d; FE_to_B256(&x,r); le64s_to_B256(&d,r+4);
       int type=((uint64_t)r[8]<(uint64_t)tameCut)?0:1;
       if(ht_insert(x,d,type,&foundK)){ solved=1; break; }
+    }
+    // KANG_DUMP=/path/to/file — dump first-iteration DP records + start state
+    // for offline verification of the GPU walk invariant x == (d*G [+ PntWild]).x
+    {
+      static int dumped=0;
+      const char* dumpEnv=getenv("KANG_DUMP");
+      if(dumpEnv && !dumped && cnt>0){
+        dumped=1;
+        FILE* df=fopen(dumpEnv,"w");
+        if(df){
+          fprintf(df,"tameCut %u\nkangs %u\n",TC,KC);
+          for(uint32_t t=0;t<KC;t++){
+            B256 sd; le64s_to_B256(&sd,startDist+t*4);
+            fprintf(df,"start %u %08x%08x%08x%08x%08x%08x%08x%08x\n",t,
+              sd.w[7],sd.w[6],sd.w[5],sd.w[4],sd.w[3],sd.w[2],sd.w[1],sd.w[0]);
+          }
+          B256 wx,wy; FE_to_B256(&wx,pntWildBuf); FE_to_B256(&wy,pntWildBuf+4); // FIX v3: bukan +5 (PntWild=2 word FE)
+          fprintf(df,"wild %08x%08x%08x%08x%08x%08x%08x%08x %08x%08x%08x%08x%08x%08x%08x%08x\n",
+            wx.w[7],wx.w[6],wx.w[5],wx.w[4],wx.w[3],wx.w[2],wx.w[1],wx.w[0],
+            wy.w[7],wy.w[6],wy.w[5],wy.w[4],wy.w[3],wy.w[2],wy.w[1],wy.w[0]);
+          uint32_t n=(cnt<300)?cnt:300;
+          for(uint32_t i=0;i<n;i++){
+            uint64_t* r=rec+(uint64_t)i*9;
+            fprintf(df,"dp %llu %016llx%016llx%016llx%016llx %016llx%016llx%016llx%016llx\n",
+              (unsigned long long)r[8], r[0],r[1],r[2],r[3], r[4],r[5],r[6],r[7]);
+          }
+          fclose(df);
+          printf("[dump] wrote %s (tameCut=%u kangs=%u recs=%u)\n",dumpEnv,TC,KC,n); fflush(stdout);
+        }
+      }
     }
     gpuBuf^=1; // swap to other buffer set for next iteration
     iter++;
