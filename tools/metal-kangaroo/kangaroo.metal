@@ -193,7 +193,7 @@ inline Jac jac_add_aff(Jac p, PAFF q){
 // ---------------- kernelGen: compute start point d*G (+PntWild for wild) ----------------
 // fwd decls — definisi lengkap ada setelah kernelGen
 inline PAFF aff_mul_G(const uint64_t d[4]);
-inline PAFF aff_add(PAFF a, PAFF b, bool* bounced);
+inline PAFF aff_add(PAFF a, PAFF b, thread bool* bounced);
 
 kernel void kernelGen(device const uint64_t* startDist [[buffer(0)]],
                       device const PAFF* pntWild [[buffer(1)]],
@@ -242,7 +242,7 @@ inline PAFF aff_mul_G(const uint64_t d[4]){
 // representasi), simetri +-y hancur, kang bisa rusak permanen lewat kasus
 // infinity yang salah tangani. Walk affine menjadikan lompatan f(x) murni +
 // tanda dari parity y affine = prasyarat simetri kangaroo yang benar.
-inline PAFF aff_add(PAFF a, PAFF b, bool* bounced){
+inline PAFF aff_add(PAFF a, PAFF b, thread bool* bounced){
   *bounced=false;
   Fe dx=fe_modsub(b.x,a.x);
   if(fe_eq4(dx,FE_ZERO)){

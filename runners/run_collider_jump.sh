@@ -46,10 +46,23 @@ ensure_metal_bin() {
 }
 
 # device-aware kang pool when neither env nor config sets KANGS
+# Detects GPU type via system_profiler and sizes the pool accordingly.
+# The binary (main.m) applies its own cap at dispatch time, but a sane
+# default here avoids oversized GPU buffer allocation.
 auto_kangs() {
-  local ram_gb k
+  local gpu_name ram_gb cores k
+  # detect GPU name (first Metal GPU found)
+  gpu_name="$(system_profiler SPDisplaysDataType 2>/dev/null \
+    | grep -m1 'Chipset Model:' | sed 's/.*Chipset Model: *//')" || true
   ram_gb=$(( ($(sysctl -n hw.memsize 2>/dev/null || echo 17179869184) ) / 1073741824 ))
-  k=$(( ram_gb * 1024 ))
+  # GPU-family defaults (matches main.m maxKangs caps)
+  case "$gpu_name" in
+    *M4*Max*)   k=20000 ;;
+    *M4*Pro*)   k=12000 ;;
+    *M4*|*M2*)  k=6000  ;;
+    *M1*)       k=4096  ;;
+    *)          k=$(( ram_gb * 512 )) ;;   # fallback: RAM-based estimate
+  esac
   [[ $k -lt 2048 ]] && k=2048
   [[ $k -gt 65536 ]] && k=65536
   echo "$k"

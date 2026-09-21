@@ -248,7 +248,10 @@ int main(int argc, char** argv){
         NSUInteger cores=maxTG/execW;
         printf("GPU cores (reported): %lu (execWidth=%lu, maxTG=%lu)\n",
                (unsigned long)cores,(unsigned long)execW,(unsigned long)maxTG);
-        printf("kang pool will use ALL cores, capped at 10000 kangs.\n");
+        NSUInteger infoKangs;
+        if(cores<=10) infoKangs=6000; else if(cores<=20) infoKangs=12000; else infoKangs=20000;
+        printf("kang pool: %lu cores → maxKangs=%lu\n",
+               (unsigned long)cores,(unsigned long)infoKangs);
       }
     }
     return 0;
@@ -423,15 +426,22 @@ int main(int argc, char** argv){
   id<MTLBuffer> bDpCnt2=[dev newBufferWithLength:4 options:MTLResourceStorageModeShared];
   id<MTLBuffer> bDpRec2=[dev newBufferWithLength:maxRec*72 options:MTLResourceStorageModeShared];
 
-  // --- kang pool sizing: use ALL GPU cores, cap effective kangs at ~10k ---
-  // (user target: 6k-10k). Threadgroup size is bounded by the GPU's maxTG,
-  // so we just pick a threadgroup = maxTG and let the grid span every core.
+  // --- kang pool sizing: dynamic based on GPU core count ---
+  // M2/M4 (10 cores) → 6k, M4 Pro (20 cores) → 12k, M4 Max (40 cores) → 20k.
   NSUInteger execW=[psWalk threadExecutionWidth];
   NSUInteger maxTG=[psWalk maxTotalThreadsPerThreadgroup];
-  NSUInteger maxKangs=6000;                  // reduced from 10k — less GPU pressure = less Mac lag
+  NSUInteger cores=maxTG/execW;
+  NSString* gpuName=[[dev name] uppercaseString] ?: @"";
+  NSUInteger maxKangs;
+  if(cores<=10)       maxKangs=6000;
+  else if(cores<=20)  maxKangs=12000;
+  else                maxKangs=20000;
+  printf("GPU: %s (%lu cores, execWidth=%lu, maxTG=%lu) maxKangs=%lu\n",
+         [gpuName UTF8String], (unsigned long)cores, (unsigned long)execW,
+         (unsigned long)maxTG, (unsigned long)maxKangs);
   NSUInteger tgThreads=(NSUInteger)kangs;
-  if(tgThreads>maxKangs) tgThreads=maxKangs; // raise the old 8-core cap into 6k-10k range
-  if(tgThreads<6000 && (NSUInteger)kangs>=6000) tgThreads=6000; // soft floor when auto-sized
+  if(tgThreads>maxKangs) tgThreads=maxKangs;
+  if(tgThreads<4096 && (NSUInteger)kangs>=4096) tgThreads=4096;
   NSUInteger tgSize=maxTG;                   // largest threadgroup the GPU allows
   NSUInteger gridW=(tgThreads+tgSize-1)/tgSize;
   tgThreads=gridW*tgSize;                    // align kang count to threadgroups
@@ -593,7 +603,7 @@ int main(int argc, char** argv){
         (unsigned long long)maxRec, (double)totalOps, totalOps/dt/1e6, HTCOUNT);
       fflush(stdout);
     }
-    usleep(15000); // 15ms yield — gives GPU breathing room so macOS UI stays responsive
+    usleep(cores>10 ? 10000 : 15000); // M4 Pro/Max: 10ms, M2/M4 base: 15ms
   }
   printf("\n");
   if(solved){

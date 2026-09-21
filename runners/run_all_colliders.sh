@@ -4,7 +4,7 @@
 #   run_all_colliders.sh start-all [seconds_per_round] [kangs]
 #       - stop leftover collider processes (if any), then launch ONE master loop
 #         that sweeps ALL ENABLED configs/collider_jump_*_rnd.conf, one GPU
-#         process at a time (sequential) to avoid M2 GPU oversubscription.
+#       process at a time (sequential) to avoid Metal GPU oversubscription.
 #   run_all_colliders.sh stop-all      - terminate THE MASTER + runner + Metal
 #         binary + any leftover GPU process. Waits, force-kills, and verifies
 #         that nothing collider-related remains.
