@@ -227,6 +227,25 @@ di-commit (local) kecuali dinyatakan lain.
   + p140/145/150/155/160 — SEMUA target compute kita masih hidup); 83 swept (p1-p70
   termasuk p20 kita + kelipatan 5 s/d p135). Ulangi berkala utk deteksi solver lain menang.
 
+### 13. AUDIT PIPELINE MATCH (2026-09-21) — keyhunt SEHAT, metal-kangaroo RUSAK
+- METODE: tanam kunci diketahui lalu uji tool end-to-end (bukan cuma baca log).
+- keyhunt (CPU): `Hit! Private Key: 80123456` dalam detik pd range tanaman. Binary +
+  runner + `-r` hex polos (TANPA prefix 0x — binary abaikan 0x dan mulai dr 1!) BENAR.
+  Pipeline keyhunt TIDAK zonk; config kini full-range resmi.
+- metal-kangaroo (GPU): `--selftest` GAGAL di semua range (24/32/40 bit): kunci tanaman
+  tdk pernah ketemu (r24 seharusnya ~65 ops, real 8,5e8 ops TANPA collision = mustahil
+  secara probabilistik), `known k` tercetak 0000...0000 pdhl Q.x non-zero (bug internal).
+  Kesimpulan: binary GPU TIDAK PERNAH mampu menemukan kunci apa pun. ±5.870 round GPU
+  (±586 jam) tercatat di pct_history = wasted. MACAM2 TEMUAN TERKAIT:
+  a) binary ABAIKAN START/END config (hanya baca PUZZLE/DP_BITS/PUBKEY/JUMP_PCT/START_PCT)
+     — scan selalu full range resmi [2^(n-1),2^n) dgn offset acak per round (ini sehat).
+  b) runner hex_at() kena bug ÷100: (R*e8)//1e8 seharusnya //1e10 → hex ckpt/history
+     salah faktor 100 vs posisi GPU sebenarnya (bookkeeping zonk, GPU-nya sendiri ok).
+  c) r24 anomali: HT=47k (harusnya ±4), DP ratio 2^-12 pdhl DP=4 → verifikasi DP path.
+  STATUS: GPU collider = TIDAK PRODUKTIF. JANGAN percaya progress % collider.
+  Follow-up: fix/rewrite kernel metal (selftest HARUS pass dulu) ATAU stop GPU +
+  alihkan compute ke keyhunt CPU (terbukti sehat). Baru lanjut sweep.
+
 ## Execution Style
 - Be direct and action-oriented.
 - Prefer Indonesian when the user writes in Indonesian.
