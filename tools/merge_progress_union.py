@@ -87,8 +87,12 @@ def key_of(line: str) -> str:
 def merge_lines(base_text: str, ours_text: str, theirs_text: str) -> str:
     # Revert range 2026-09-22: key GLOBAL record disaring dari KEDUA sisi merge
     # (union tak bisa menghapus -> tanpa denylist entri terbuang bangkit lagi).
+    # FIX 2026-09-23 (uji pull antar-mesin): skip `k in base_keys` DIHAPUS —
+    # saat mesin lain mendorong file versi LAMA, key entri bersih di theirs == key
+    # di base -> dulu di-skip padahal salinan ours sudah terbuang denylist ->
+    # 1437 entri progres p140 hilang dalam uji. Cukup skip via seen + deny
+    # (entri era semuanya tercakup record). base_text sengaja tak dipakai.
     deny = load_deny()
-    base_keys = {key_of(ln) for ln in clean_lines(base_text)}
     ours_lines = []
     n_deny = 0
     for ln in clean_lines(ours_text):
@@ -104,7 +108,7 @@ def merge_lines(base_text: str, ours_text: str, theirs_text: str) -> str:
         if k in deny:
             n_deny += 1
             continue
-        if k in seen or k in base_keys:
+        if k in seen:
             continue
         new_lines.append(ln)
         seen.add(k)
