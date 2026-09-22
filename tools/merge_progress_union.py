@@ -13,7 +13,9 @@ ditambahkan di belakang (history).
 KONTRAK GIT MERGE DRIVER: hasil DITULIS ke file %A (argv[2]) in-place, exit 0.
 Dipasang otomatis oleh runners/run_all_colliders.sh (merge.progressUnion.driver).
 """
+import os
 import re
+import subprocess
 import sys
 
 HEX_RE = re.compile(r'hex:\s*"(0x[0-9a-fA-F]+)"')
@@ -25,6 +27,46 @@ MARKER_RE = re.compile(r'^(<{7}|={7}|>{7})')
 
 def clean_lines(text: str):
     return [ln for ln in text.splitlines() if not MARKER_RE.match(ln)]
+
+
+RECORD_NAME = "revert_range_20260922.keys"  # denylist revert range 2026-09-22
+
+
+def load_deny() -> set:
+    """GLOBAL key dari record revert range (opsional; tak ada -> set kosong).
+
+    Dipakai utk menyaring baris era EXPAND range dari KEDUA sisi merge — union
+    driver hanya bisa menambah, jadi tanpa denylist entri yang sudah dibuang di
+    mesin A "bangkit lagi" lewat push mesin B. Detail: tools/revert_range_prune.py.
+    """
+    cands, d = [], os.getcwd()
+    for _ in range(6):
+        cands.append(os.path.join(d, RECORD_NAME))
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    try:
+        top = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout.strip()
+        if top:
+            cands.append(os.path.join(top, RECORD_NAME))
+    except Exception:
+        pass
+    tried = set()
+    for p in cands:
+        if p in tried:
+            continue
+        tried.add(p)
+        try:
+            with open(p) as f:
+                return {ln.split("\t", 1)[1].strip()
+                        for ln in f if ln.startswith("GLOBAL\t")}
+        except OSError:
+            continue
+    return set()
 
 
 def key_of(line: str) -> str:
@@ -43,13 +85,25 @@ def key_of(line: str) -> str:
 
 
 def merge_lines(base_text: str, ours_text: str, theirs_text: str) -> str:
+    # Revert range 2026-09-22: key GLOBAL record disaring dari KEDUA sisi merge
+    # (union tak bisa menghapus -> tanpa denylist entri terbuang bangkit lagi).
+    deny = load_deny()
     base_keys = {key_of(ln) for ln in clean_lines(base_text)}
-    ours_lines = clean_lines(ours_text)
+    ours_lines = []
+    n_deny = 0
+    for ln in clean_lines(ours_text):
+        if key_of(ln) in deny:
+            n_deny += 1
+            continue
+        ours_lines.append(ln)
     seen = {key_of(ln) for ln in ours_lines}
 
     new_lines = []
     for ln in clean_lines(theirs_text):
         k = key_of(ln)
+        if k in deny:
+            n_deny += 1
+            continue
         if k in seen or k in base_keys:
             continue
         new_lines.append(ln)
@@ -63,6 +117,9 @@ def merge_lines(base_text: str, ours_text: str, theirs_text: str) -> str:
 
     if new_lines:
         sys.stderr.write("progressUnion: +%d baris dari remote\n" % len(new_lines))
+    if n_deny:
+        sys.stderr.write("progressUnion: %d baris era-revert disaring (denylist)\n"
+                         % n_deny)
     return "\n".join(out) + "\n"
 
 

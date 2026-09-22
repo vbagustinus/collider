@@ -130,6 +130,33 @@ Detail:
   full-load bersamaan tanpa memantau RAM.
 - prefer foreground Metal run saat eksperimen; daemonized hanya utk sweep.
 
+## REVERT RANGE (2026-09-22, keputusan user — config kembali SUBRANGE asli)
+
+- **Config `configs/collider_jump_*_rnd.conf` := state pra-EXPAND** (commit
+  `72de49d~1`, byte-identik — tervalifikasi 0 baris diff, 6 file termasuk p30).
+  Commit EXPAND 21 Sep (range resmi penuh) DIBATALKAN untuk config.
+- **Entri progress era range-baru DIBUANG**: 773 entri checkpoint + 773 baris
+  `pct_history` (tercatat 21 Sep 06:41 → 22 Sep); sisa tervalifikasi == blob
+  `72de49d~1` per file (6.932 ckpt).
+- **Hex 6.932 entri dipertahankan DIRECOMPUTE** dari pct memakai range lama
+  (`hex = "0x%x" % (S + (R*e8)//10000000000)`, identik `hex_at` runner; tervaliasi
+  6932/6932) → guard dobel runner (`seen` ckpt + konversi pct_history) hidup lagi.
+- **Penanda permanen**: `revert_range_20260922.keys` (1546 PCTDROP + 8478 GLOBAL
+  key — termasuk hex LAMA superseded) — **JANGAN dihapus** selama config subrange.
+  Tiga lapis pertahanan: (1) union driver `tools/merge_progress_union.py`
+  menyaring key GLOBAL dari KEDUA sisi merge (union tak bisa menghapus → tanpa
+  denylist, entri terbuang "bangkit lagi" dari mesin lain); (2)
+  `tools/revert_range_prune.py` (drop berbasis PCTDROP = stabil terhadap recompute;
+  idempoten; auto-skip bila config kembali range penuh); (3) hook di
+  `runners/sync.sh sync_normalize` → jalan otomatis tiap pull/push/sync.
+- **CLI**: `bash runners/sync.sh normalize` kini ADA di collider (dulu hilang —
+  parity dengan keyhunt).
+- **Backup**: `backups/range_revert_20260922/snapshot_before_revert.tar.gz` (root project).
+- **EXPAND ulang nanti?** Hapus dulu record + hook sync.sh + denylist driver,
+  baru ubah config — sebaliknya entry valid akan tersaling/terbuang salah.
+- Setelah pull pertama di mesin lain: cukup sync biasa (driver+hook self-heal);
+  `bash runners/sync.sh normalize` untuk memaksa satu siklus pembersihan.
+
 ## Etika antar mesin
 - Jangan reset/rewrite history yang sudah ter-push (progress mesin lain ada
   di sana).

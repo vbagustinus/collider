@@ -146,6 +146,12 @@ _col_stash_pop_ours() { # $1 = n0 (baseline stash count from before our pushes)
 # Normalize = dedupe entry lines and sort by presentage. Idempotent,
 # atomic (tmp + rename), safe under concurrency.
 sync_normalize() {
+  # Revert-range self-heal (2026-09-22): buang entri era EXPAND range + recompute
+  # hex ckpt memakai record revert_range_20260922.keys — idempoten; no-op bila
+  # record tak ada.
+  if [ -f "$COL_ROOT/revert_range_20260922.keys" ] && [ -f "$COL_ROOT/tools/revert_range_prune.py" ]; then
+    python3 "$COL_ROOT/tools/revert_range_prune.py" >/dev/null 2>&1 || true
+  fi
   python3 - "$COL_ROOT/checkpoints" <<'PY'
 import os, re, sys
 
@@ -490,6 +496,7 @@ sync_main() {
     pull)        sync_pull ;;
     push)        sync_push ;;
     sync|both)   sync_pull && sync_push ;;
+    normalize)   sync_normalize ;;
     agents)      _col_root_agents_refresh ;;
     daemon-stop) sync_daemon_stop ;;
     status)
@@ -500,7 +507,7 @@ sync_main() {
       $COL_GIT status --short | head -5
       ;;
     *)
-      echo "pakai: bash runners/sync.sh [pull|push|sync|agents|status|daemon-stop]" >&2
+      echo "pakai: bash runners/sync.sh [pull|push|sync|normalize|agents|status|daemon-stop]" >&2
       return 2
       ;;
   esac
