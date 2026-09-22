@@ -252,7 +252,31 @@ di-commit (local) kecuali dinyatakan lain.
   Follow-up: fix/rewrite kernel metal (selftest HARUS pass dulu) ATAU stop GPU +
   alihkan compute ke keyhunt CPU (terbukti sehat). Baru lanjut sweep.
 
-## Execution Style
+### 14. collider/tools/trim_logs.sh — rotasi/trim log runtime collider (baru, 2026-09-22)
+- Padanan `keyhunt/tools/trim_logs.sh` (kebijakan identik: usia ≥ TRIM_DAYS=3 hari
+  → hapus; file > TRIM_MAX_FILE_MB=100 → potong tail 10 MB; total logs/ >
+  TRIM_TOTAL_MB=300 → hapus tertua; file yang dipakai proses (lsof) di-skip).
+- Whitelist tak tersentuh: `logs/*.pct_history` (progress union), MATCH/FOUND,
+  `.col_found_seen`, `.pids/`, dan `checkpoints/` (direktori lain).
+- Dipanggil `collider/runners/run_all_colliders.sh` di start-all & stop-all.
+  Manual: `bash collider/tools/trim_logs.sh [--dry-run]`.
+- ALASAN (audit storage 2026-09-22): collider sebelumnya TIDAK punya pemangkas
+  → `p*_cj_rnd.metal.log` tumbuh ±1,4 MB/hari tanpa batas (57 MB/bulan);
+  AGENTS.md repo collider sudah menjanjikan "log runtime di-trim otomatis".
+- AUDIT PERTUMBUHAN keyhunt+collider (2026-09-22, angka terukur): log runtime
+  ±22 MB/hari total (keyhunt `*.kh.log` 1.599 B/round × 78 puzzle × ±107
+  round/hari ≈ 13 MB; metal.log 2.550 B/round × 5 config ≈ 1,4 MB; checkpoint
+  ±0,9 MB/hari by-design). Keyhunt sudah dibatasi trim_logs (steady ±60 MB).
+  Pendorong `.git` TERBESAR = commit sync tiap siklus (155 file progress di-rewrite
+  per commit): keyhunt pack 3,48→12,33 MiB dalam 2 hari. Mitigasi: daemon
+  30→60 menit (default `*_SYNC_PUSH_S:-3600`), `gc.auto=256`, dan
+  `git gc --aggressive --prune=now` (keyhunt 12,33→3,46 MiB; collider 3,58 MiB
+  pack + 6,23 MB loose → 833 KiB; history 197/309 commit UTUH).
+  DILARANG rewrite/orphan history (kontrak antar-mesin di AGENTS.md per-repo).
+- File log mentah `*.kh.log`/`*.metal.log` di-gitignore — yang terpush cuma
+  progress, MATCH/FOUND, kode, config.
+
+
 - Be direct and action-oriented.
 - Prefer Indonesian when the user writes in Indonesian.
 - Do not over-explain; deliver the working result.
