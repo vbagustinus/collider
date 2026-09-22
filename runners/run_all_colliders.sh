@@ -100,6 +100,10 @@ case "$cmd" in
     else
       rm -f "$PID_DIR"/sweep_*.pid 2>/dev/null || true
     fi
+    # --- trim log runtime biar logs/ nggak numpuk (metal.log ~1,4 MB/hari;
+    #     pct_history / MATCH / .pids TIDAK disentuh — lihat tools/trim_logs.sh) ---
+    bash "$B1000/tools/trim_logs.sh" || echo "WARN: trim_logs gagal (lanjut)"
+
     # --- git sync: pull latest progress from cloud, then keep syncing while running ---
     # sync.sh registers the progressUnion driver (idempotent), pulls with a
     # progress-only stash, and starts the periodic two-way sync daemon.
@@ -142,6 +146,9 @@ case "$cmd" in
       exit 1
     fi
     echo "all collider processes stopped (0 left)."
+    # --- trim log runtime (proses udah mati, lsof nggak akan nge-skip) ---
+    bash "$B1000/tools/trim_logs.sh" || echo "WARN: trim_logs gagal (lanjut)"
+
     # --- git sync: stop periodic daemon + final flush push to cloud ---
     # sync_daemon_stop -> sync_push: normalize, commit, pull --rebase (union
     # driver handles progress conflicts), push, retry on fetch-first.

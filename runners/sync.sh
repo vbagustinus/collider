@@ -433,7 +433,7 @@ sync_push() {
 # Writes a pid file (+ the process start time, to detect pid reuse) so stop-all
 # from ANOTHER shell can terminate it.
 sync_daemon() {
-  local interval="${COL_SYNC_PUSH_S:-${KH_SYNC_PUSH_S:-1800}}"   # default 30 menit (keputusan 2026-09-21)
+  local interval="${COL_SYNC_PUSH_S:-${KH_SYNC_PUSH_S:-3600}}"   # default 60 menit (keputusan 2026-09-22: turunkan pertumbuhan .git — tiap siklus = commit progress utk 10 file; MATCH relay tetap instan)
   local pf="$COL_ROOT/logs/.pids/sync_daemon.pid"
   local pf_start="$COL_ROOT/logs/.pids/sync_daemon.pid.start"
   mkdir -p "$(dirname "$pf")"

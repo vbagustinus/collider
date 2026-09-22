@@ -45,7 +45,12 @@ Perintah untuk AI:
    boleh di-repair; `p*_kh.conf` dan `narrowed.conf` JANGAN disentuh tanpa
    instruksi eksplisit.
 5. **JANGAN commit log mentah / binary.** Yang terlacak: progress, MATCH/FOUND,
-   kode, config. Log runtime di-trim otomatis.
+   kode, config. Log runtime di-trim otomatis oleh `tools/trim_logs.sh`
+   (dipanggil di start-all & stop-all; default: usia ≥3 hari → hapus,
+   file >100 MB → potong tail 10 MB, total logs/ >300 MB → hapus tertua;
+   whitelist `*.pct_history`/MATCH/FOUND/.pids tidak pernah disentuh).
+   BARU 2026-09-22: script ini sebelumnya tidak ada (metal.log tumbuh
+   ±1,4 MB/hari tanpa batas) — sekarang sudah ada dan terpasang di runner.
 6. **Konflik merge progress?** Biarkan union driver bekerja; kalau ada marker
    `<<<<<<<` tersisa dari riwayat kotor, self-healing driver akan buang saat
    merge berikutnya. Jangan resolve manual dengan memilih satu sisi.
@@ -58,10 +63,18 @@ Perintah untuk AI:
 - Rebase/merge tertinggal di-abort otomatis di awal/akhir sync_pull.
 - Push dibedakan: offline/auth vs non-FF; fallback merge --autostash saat tree
   kotor non-progress (file kode belum di-commit — commit dulu!).
-- Daemon sync tiap 30 MENIT (default `COL_SYNC_PUSH_S:-1800`, sejak 2026-09-21):
-  tarik progress mesin lain + cek MATCH tanpa spam commit. Override via env
-  (`COL_SYNC_PUSH_S=60`) bila perlu siklus cepat. Tanpa prompt kredensial
-  (ssh BatchMode) — aktifkan ssh-agent SEBELUM start-all kalau ssh butuh passphrase.
+- Daemon sync tiap 60 MENIT (default `COL_SYNC_PUSH_S:-3600`, sejak 2026-09-22;
+  sebelumnya 30 menit/`1800` sejak 2026-09-21): tarik progress mesin lain +
+  cek MATCH tanpa spam commit. Tiap siklus bikin commit progress → 48
+  siklus/hari menumpukkan `.git`; 60 menit memotongnya ~2×. Override via env
+  (`COL_SYNC_PUSH_S=60`) bila perlu siklus cepat; MATCH relay tetap instan.
+  Tanpa prompt kredensial (ssh BatchMode) — aktifkan ssh-agent SEBELUM
+  start-all kalau ssh butuh passphrase.
+- GIT GC (audit 2026-09-22): `gc.auto=256` diset lokal; `.git` pernah menumpuk
+  6,23 MB loose object karena default 6700. Kalau `.git` membengkak, jalankan
+  `git gc --aggressive --prune=now` (audit: 3,58 MiB pack + 6,23 MB loose →
+  833 KiB, 309 commit utuh). JANGAN pernah rewrite/orphan history (Etika
+  antar mesin).
 - ANTI-ZONK MATCH: notifikasi hanya bunyi kalau log berisi 'SOLVED k = <hex>'
   (rc=0 saat timeout normal TIDAK dianggap match). `tools/sweep/sweep.py`
   verifikasi priv→pubkey→hash160 SEBELUM kirim dana (offline-safe) — MATCH

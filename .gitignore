@@ -4,6 +4,8 @@ tools/metal-kangaroo/metal-kangaroo
 # --- runtime logs (bukan progress) ---
 logs/*.metal.log
 logs/sweep_scheduler.log
+logs/daemon_launch.log
+logs/.col_found_seen
 logs/.pids/
 tools/sweep/sweep_done.log
 tools/sweep/*.sweep.log
