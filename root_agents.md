@@ -276,6 +276,7 @@ di-commit (local) kecuali dinyatakan lain.
 - File log mentah `*.kh.log`/`*.metal.log` di-gitignore — yang terpush cuma
   progress, MATCH/FOUND, kode, config.
 
+## Execution Style
 
 - Be direct and action-oriented.
 - Prefer Indonesian when the user writes in Indonesian.
