@@ -105,10 +105,13 @@ Fe fe_inv(Fe a){
 inline PAFF p2_double(PAFF a){
   if(a.x.v[3]==0&&a.x.v[2]==0&&a.x.v[1]==0&&a.x.v[0]==0) return a; // infinity
   Fe x2=fe_sqr(a.x);
-  Fe threex2=fe_add(fe_add(x2,x2),x2);
-  Fe twoy=fe_add(a.y,a.y);
+  // FIX 2026-09-23: semua penjumlahan yang jadi operand modul HARUS fe_modadd.
+  // fe_add murni wrap mod 2^256; bila x1+x2 >= 2^256 (~50% langkah) operand
+  // menyimpang 0x1000003D1 = 2^256-p -> hasil salah & walk nyasar off-curve.
+  Fe threex2=fe_modadd(fe_modadd(x2,x2),x2);
+  Fe twoy=fe_modadd(a.y,a.y);
   Fe lam=fe_mul(threex2, fe_inv(twoy));
-  Fe nx=fe_modsub(fe_sqr(lam), fe_add(a.x,a.x));
+  Fe nx=fe_modsub(fe_sqr(lam), fe_modadd(a.x,a.x));
   Fe ny=fe_modsub(fe_mul(lam, fe_modsub(a.x,nx)), a.y);
   PAFF r; r.x=nx; r.y=ny; return r;
 }
@@ -248,8 +251,12 @@ inline PAFF aff_add(PAFF a, PAFF b, thread bool* bounced){
   if(fe_eq4(dx,FE_ZERO)){
     Fe dy=fe_modsub(b.y,a.y);
     if(fe_eq4(dy,FE_ZERO)){
-      Fe lam=fe_mul(fe_add(fe_add(a.x,a.x),a.x), fe_inv(fe_add(a.y,a.y)));
-      Fe nx=fe_modsub(fe_sqr(lam), fe_add(a.x,a.x));
+      // FIX 2026-09-23: fe_add -> fe_modadd. fe_add wrap mod 2^256 bila
+      // x1+x2 >= 2^256 (~50% langkah) -> operand salah selisih 0x1000003D1
+      // (2^256-p) -> titik hasil off-curve, walk rusak permanen (akar bug
+      // selftest 32/40-bit gagal & 5.870 round GPU sia-sia).
+      Fe lam=fe_mul(fe_modadd(fe_modadd(a.x,a.x),a.x), fe_inv(fe_modadd(a.y,a.y)));
+      Fe nx=fe_modsub(fe_sqr(lam), fe_modadd(a.x,a.x));
       Fe ny=fe_modsub(fe_mul(lam,fe_modsub(a.x,nx)), a.y);
       PAFF r; r.x=nx; r.y=ny; return r;
     }
@@ -257,7 +264,7 @@ inline PAFF aff_add(PAFF a, PAFF b, thread bool* bounced){
     return a;
   }
   Fe lam=fe_mul(fe_modsub(b.y,a.y), fe_inv(dx));
-  Fe nx=fe_modsub(fe_sqr(lam), fe_add(a.x,b.x));
+  Fe nx=fe_modsub(fe_sqr(lam), fe_modadd(a.x,b.x)); // FIX 2026-09-23: fe_add -> fe_modadd
   Fe ny=fe_modsub(fe_mul(lam,fe_modsub(a.x,nx)), a.y);
   PAFF r; r.x=nx; r.y=ny; return r;
 }

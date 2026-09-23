@@ -34,6 +34,15 @@ ensure_metal_bin() {
   elif command -v file >/dev/null 2>&1; then
     file "$METAL_BIN" 2>/dev/null | grep -q "$(uname -m)" || need=1
   fi
+  # FIX 2026-09-23: deteksi source LEBIH BARU dari binary. Versi lama cuma cek
+  # keberadaan/arch -> fix di main.m tak pernah masuk binary basi (akar "binary
+  # stale" audit 2026-09-23, lihat AGENTS.md §13).
+  if [[ "$need" -eq 0 ]]; then
+    local s
+    for s in main.m kangaroo.metal Makefile build.sh; do
+      if [[ -f "$METAL_DIR/$s" && "$METAL_DIR/$s" -nt "$METAL_BIN" ]]; then need=1; break; fi
+    done
+  fi
   if [[ "$need" -eq 1 ]]; then
     echo "[portable] metal-kangaroo binary not usable here; building for $(uname -m)..."
     if bash "$METAL_DIR/build.sh"; then

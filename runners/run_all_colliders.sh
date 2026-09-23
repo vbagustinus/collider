@@ -109,6 +109,30 @@ case "$cmd" in
     # progress-only stash, and starts the periodic two-way sync daemon.
     echo "=== pulling latest progress from cloud ==="
     sync_pull
+
+    # --- PREFLIGHT GPU: selftest 16-bit wajib PASS sebelum sweep dimulai ---
+    # (bug fe_add->fe_modadd di kangaroo.metal diperbaiki & terverifikasi
+    #  2026-09-23; build selalu fresh dulu. Escape: COL_SKIP_PREFLIGHT=1)
+    if [[ "${COL_SKIP_PREFLIGHT:-0}" == "1" ]]; then
+      echo "PREFLIGHT collider: SKIP (COL_SKIP_PREFLIGHT=1)"
+    else
+      MK="$B1000/tools/metal-kangaroo"
+      PF_OUT="/tmp/col_preflight_selftest.out"
+      [[ -f "$MK/test_16bit.conf" ]] || { echo "PREFLIGHT GAGAL: hilang $MK/test_16bit.conf"; exit 1; }
+      echo "=== preflight: build metal-kangaroo + selftest 16-bit (~5 dtk) ==="
+      if ! ( cd "$MK" && bash build.sh ) >/tmp/col_preflight_build.out 2>&1; then
+        echo "PREFLIGHT GAGAL: build.sh error — tail:"; tail -n 15 /tmp/col_preflight_build.out; exit 1
+      fi
+      ( cd "$MK" && ./metal-kangaroo test_16bit.conf --selftest -t 60 2048 ) >"$PF_OUT" 2>&1
+      pfr=$?
+      if [[ $pfr -ne 0 ]] || ! grep -q "selftest: PASS" "$PF_OUT"; then
+        echo "PREFLIGHT GAGAL: selftest 16-bit rc=$pfr — sweep DIBATALKAN (GPU belum terverifikasi)."
+        echo "--- tail $PF_OUT ---"; tail -n 15 "$PF_OUT"
+        exit 1
+      fi
+      echo "PREFLIGHT OK: selftest 16-bit PASS ($(grep -m1 '^SOLVED k' "$PF_OUT" | tr -s ' '))"
+    fi
+
     sync_daemon
 
     rm -f "$STOP_FILE"
