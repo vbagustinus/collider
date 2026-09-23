@@ -228,30 +228,47 @@ di-commit (local) kecuali dinyatakan lain.
   + p140/145/150/155/160 — SEMUA target compute kita masih hidup); 83 swept (p1-p70
   termasuk p20 kita + kelipatan 5 s/d p135). Ulangi berkala utk deteksi solver lain menang.
 
-### 13. AUDIT PIPELINE MATCH (2026-09-21) — keyhunt SEHAT, metal-kangaroo RUSAK
+### 13. AUDIT PIPELINE MATCH (2026-09-21) — keyhunt SEHAT; metal-kangaroo RUSAK→FIXED (2026-09-23)
 - METODE: tanam kunci diketahui lalu uji tool end-to-end (bukan cuma baca log).
 - keyhunt (CPU): `Hit! Private Key: 80123456` dalam detik pd range tanaman. Binary +
   runner + `-r` hex polos (TANPA prefix 0x — binary abaikan 0x dan mulai dr 1!) BENAR.
   Pipeline keyhunt TIDAK zonk; config kini full-range resmi.
-- metal-kangaroo (GPU): `--selftest` GAGAL di semua range (24/32/40 bit): kunci tanaman
-  tdk pernah ketemu (r24 seharusnya ~65 ops, real 8,5e8 ops TANPA collision = mustahil
-  secara probabilistik), `known k` tercetak 0000...0000 pdhl Q.x non-zero (bug internal).
-  Kesimpulan: binary GPU TIDAK PERNAH mampu menemukan kunci apa pun. ±5.870 round GPU
-  (±586 jam) tercatat di pct_history = wasted. MACAM2 TEMUAN TERKAIT:
+  PENTING (2026-09-23): `writekey` selalu append hasil ke `KEYFOUNDKEYFOUND.txt` di CWD
+  (langsung ke-disk) tetapi TIDAK flush stdout — output `Hit!` bisa HILANG saat proses
+  di-kill (buffer stdio). Inilah penyebab salah temuan "tanaman tak ketemu" saat debug.
+  Preflight `start-all` kini tanam kunci 0x80123456 (range 4096) di workdir TEMP lalu cek
+  file tsb (escape: `KH_SKIP_PREFLIGHT=1`). JANGAN tanam kunci di repo — ledger tercemar.
+- metal-kangaroo (GPU), temuan audit 2026-09-21 (historis): `--selftest` GAGAL di semua
+  range (24/32/40 bit), ±5.870 round GPU (±586 jam) tercatat di pct_history = wasted.
+  TEMUAN TERKAIT (tetap berlaku):
   a) binary ABAIKAN START/END config (hanya baca PUZZLE/DP_BITS/PUBKEY/JUMP_PCT/START_PCT)
      — scan selalu full range resmi [2^(n-1),2^n) dgn offset acak per round (ini sehat).
-  b) runner hex_at() kena bug ÷100: (R*e8)//1e8 seharusnya //1e10 → hex ckpt/history
-     salah faktor 100 vs posisi GPU sebenarnya (bookkeeping zonk, GPU-nya sendiri ok).
-  c) r24 anomali: HT=47k (harusnya ±4), DP ratio 2^-12 pdhl DP=4 → verifikasi DP path.
-  FIX BOOKKEEPING (2026-09-21, selesai): hex_at() ÷1e8→÷1e10 diperbaiki + 6.938 hex
-  ckpt diregenerasi dr pct via `collider/tools/fix_ckpt_hex.py` (idempoten, --check).
-  Round baru setelah rotasi terbukti tulis hex benar. Catatan: hex historis lama =
-  campuran beberapa formula era (ada yg bahkan di bitlen puzzle tetangga) — pct di
-  ckpt/pct_history adalah SATU-SATUNYA sumber valid. Bookkeeping benar ≠ binary
-  sehat: GPU tetap RUSAK (selftest gagal) sampai fix kernel terbukti.
-  STATUS: GPU collider = TIDAK PRODUKTIF. JANGAN percaya progress % collider.
-  Follow-up: fix/rewrite kernel metal (selftest HARUS pass dulu) ATAU stop GPU +
-  alihkan compute ke keyhunt CPU (terbukti sehat). Baru lanjut sweep.
+  b) runner hex_at() kena bug ÷100 → FIX BOOKKEEPING 2026-09-21 (6.938 hex ckpt diregenerasi
+     dr pct via `collider/tools/fix_ckpt_hex.py`, idempoten/--check). Catatan: hex historis
+     lama = campuran beberapa formula era (ada yg bahkan di bitlen puzzle tetangga) — pct di
+     ckpt/pct_history adalah SATU-SATUNYA sumber valid.
+  c) r24 anomali lama (HT=47k harusnya ±4; DP ratio 2^-12 pdhl DP=4) ikut lenyap setelah
+     fix root cause di bawah.
+- ROOT CAUSE + FIX GPU (2026-09-23, terverifikasi): `fe_add` (penjumlahan wrap murni mod
+  2^256) dipakai sebagai operand modular di `aff_add`/`p2_double` → saat x1+x2 ≥ 2^256
+  (~50% langkah) hasil menyimpang EKSAK +0x1000003D1 (= 2^256−p) → titik off-curve, walk
+  kangaroo rusak permanen. Semua situs diganti `fe_modadd` (carry fix-up) di kangaroo.metal;
+  JANGAN kembalikan `fe_add` ke operand modular. Selftest 24-bit "PASS" LAMA = kebetulan
+  volume kandidat, BUKAN bukti EC benar.
+- BUKTI VERIFIKASI (2026-09-23): selftest 24/32/40-bit PASS eksak (k=0x812345 /
+  0x80812345 / 0x8000812345), dump invariant 600/600 (300 tame + 300 mixed tame/wild,
+  dG akurat, pos on-curve), trace on-curve 1/1 setelah 2048 langkah, throughput 0,65 →
+  1,5 Mops/s. Record gagal dump menangkap Δ=+0x1000003D1 eksak = bukti root cause.
+- PREFLIGHT & INFRA (2026-09-23): collider `start-all` = build + `metal-kangaroo
+  test_16bit.conf --selftest -t 60 2048`, wajib `selftest: PASS` sebelum sweep (escape:
+  `COL_SKIP_PREFLIGHT=1`); `run_collider_jump.sh` `ensure_metal_bin` kini cek mtime
+  (main.m/kangaroo.metal/Makefile/build.sh > bin → rebuild) — binary basi tak dipakai
+  lagi. Conf selftest tersimpan: `collider/tools/metal-kangaroo/test_{16,24,32,40}bit.conf`
+  (invokasi: `./metal-kangaroo test_NNbit.conf --selftest -t <detik> [kangs]`; TANPA `-t`
+  → hang).
+- STATUS: GPU collider = LAYAK START (verifikasi 2026-09-23). Round GPU ≤ 2026-09-23 tetap
+  dihitung wasted (eksplorasi EC-nya tak pernah valid); pct historis = telemetri jarak,
+  bukan bukti key space tersapu.
 
 ### 14. collider/tools/trim_logs.sh — rotasi/trim log runtime collider (baru, 2026-09-22)
 - Padanan `keyhunt/tools/trim_logs.sh` (kebijakan identik: usia ≥ TRIM_DAYS=3 hari
