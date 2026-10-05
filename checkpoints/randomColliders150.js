@@ -1400,6 +1400,7 @@ let randomColliders150 = [
   {presentage: "76.09858730", hex: "0x374ebf2a33159249aa543821c0ab3c956dcc1b"},
   {presentage: "76.24777227", hex: "0x375970b891e6cea9e75caa81c78b876ca23df7"},
   {presentage: "76.25724538", hex: "0x375a1e8da53dbe5bd8b45abcc453f2ea6f7f50"},
+  {presentage: "76.36839386", hex: "0x37621623057d3d4e874fff978661310703e152"},
   {presentage: "76.45437832", hex: "0x37683ff561b7173d65398b541608a93c91e622"},
   {presentage: "76.57488430", hex: "0x3770e340bdc685c7100597d5b05c64ebf91e1e"},
   {presentage: "76.61911403", hex: "0x37740edf3a0e78fc869ce9649afabbca256584"},
