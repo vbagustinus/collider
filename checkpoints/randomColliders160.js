@@ -406,6 +406,7 @@ let randomColliders160 = [
   {presentage: "18.25404330", hex: "0xbe9a6d95da9d44f4d1a3a12f651d6617611aa217"},
   {presentage: "18.28604001", hex: "0xbea0fb226d09bb0c27780b76ce0a060aa871f100"},
   {presentage: "18.41621786", hex: "0xbebba433f3c4d5a9e2896ef67a3ca975fcfebb28"},
+  {presentage: "18.46239664", hex: "0xbec5194d0baa0ade88ea7d6a6c8dfb5e634049cf"},
   {presentage: "18.55933497", hex: "0xbed8f3a94953cac727e1095e924b606a67c19f0a"},
   {presentage: "18.63170129", hex: "0xbee7c5bd9783477b4751abccd58ec5dea4992f99"},
   {presentage: "18.72786680", hex: "0xbefb779537e0162ab9bcfa9cbebd149df1c2fb67"},
