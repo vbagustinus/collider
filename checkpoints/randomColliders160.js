@@ -656,6 +656,7 @@ let randomColliders160 = [
   {presentage: "29.00502547", hex: "0xc7343aadeaa33b47c37cdbb7901377c5ce19c2b8"},
   {presentage: "29.01382558", hex: "0xc736080efe5bcc3fc54e0e91fa4f22384a5a7d5f"},
   {presentage: "29.08891145", hex: "0xc74568b87b3123b96d9f6abee5ae701566c4852a"},
+  {presentage: "29.13098763", hex: "0xc74e06b968d30e6b8ed5818d6f7af34c7991779d"},
   {presentage: "29.13945118", hex: "0xc74fc2754130ddff8b4c351e002c5be4be6c480d"},
   {presentage: "29.24488522", hex: "0xc7655a3cfc23964bf6118379e15c3fb5bc53c796"},
   {presentage: "29.27510361", hex: "0xc76b8a8d5991b91ce408caf72c1350b71f07fa6c"},
@@ -2123,5 +2124,4 @@ let randomColliders160 = [
   {presentage: "99.82620273", hex: "0xffdc6804875f6b869cf8dad8e54524de6cee7c04"},
   {presentage: "99.86865888", hex: "0xffe519f153fbe6d1ecd86c237aea93178593e45e"},
   {presentage: "99.89278654", hex: "0xffea0aed4c7cb8ebccf5c51c31ed6b86696eb71f"},
-  {presentage: "29.13098763", hex: "0xc74e06b968d30e6b8ed5818d6f7af34c7991779d"},
 ]
