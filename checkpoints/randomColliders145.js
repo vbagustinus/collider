@@ -1715,6 +1715,7 @@ let randomColliders145 = [
   {presentage: "76.81173262", hex: "0x1d7304b53eb837ef7982ca60910355c77320c"},
   {presentage: "76.85515745", hex: "0x1d743dc17f6f547f3bd2f2895282368429228"},
   {presentage: "76.89157478", hex: "0x1d75444973fbf611310341ceb87c8c2c438bd"},
+  {presentage: "76.95432030", hex: "0x1d77089deb2f5ad8e0f9a1e46338d6d88bbf2"},
   {presentage: "76.98769304", hex: "0x1d77f9331a243ca1fc269d1bdbddf4ade07a2"},
   {presentage: "77.00465683", hex: "0x1d78737dabb369d2c1285fe2c216355797efd"},
   {presentage: "77.00727823", hex: "0x1d78866372b3543f6d34531c4657894612c87"},
