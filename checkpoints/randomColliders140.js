@@ -2018,6 +2018,7 @@ let randomColliders140 = [
   {presentage: "87.87197908", hex: "0xf64c2e6ab2b788fefddda2185470d6bdf87"},
   {presentage: "87.90243543", hex: "0xf6526b34e87b3a442fc0f40cbde4b8b7fe0"},
   {presentage: "87.93953427", hex: "0xf65a04411c18d4262140b139e3147ba6d92"},
+  {presentage: "87.97602655", hex: "0xf6617d80336c13239e3fc694797435310f3"},
   {presentage: "87.98029574", hex: "0xf6625d544c9105d4dec7a9aae75267b477b"},
   {presentage: "88.02159328", hex: "0xf66ad2827f87dbbd3bc665e69fedd7c58a6"},
   {presentage: "88.04802561", hex: "0xf6703c5339db3a7035bf76f043c1c325d15"},
