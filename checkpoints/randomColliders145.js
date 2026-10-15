@@ -1,4 +1,5 @@
 let randomColliders145 = [
+  {presentage: "0.06496681", hex: "0x1501d457d7ab98b7abda37393f4b4b563558e"},
   {presentage: "0.13380422", hex: "0x1503c496da62e79fc4a87c65a025a1659b035"},
   {presentage: "0.15445203", hex: "0x1504597041f10bfd5685dd49fe98fb22c65f9"},
   {presentage: "0.16475272", hex: "0x1504a3b21de03fe52b0f0dbf245068e475290"},
