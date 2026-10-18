@@ -1710,6 +1710,7 @@ let randomColliders160 = [
   {presentage: "73.28969349", hex: "0xeaa1baae9abb355351944fe14760c5454c98e876"},
   {presentage: "73.36106414", hex: "0xeab0588f40d8c0d4799d028d569dcf10fd5be967"},
   {presentage: "73.38779482", hex: "0xeab5d2045df770d4175dae75b882acb1e90a89df"},
+  {presentage: "73.42459545", hex: "0xeabd5b6e0fd306cda48e14554c8da23f857c0055"},
   {presentage: "73.43142874", hex: "0xeabec1b0ed7bcc87b61feab49cddcf5c26d00111"},
   {presentage: "73.49853218", hex: "0xeacc7fd80daed073b18ebf064bdab0207fe37641"},
   {presentage: "73.50089610", hex: "0xeaccfbc80cf4852294299829d7eab81a383a8409"},
