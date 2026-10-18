@@ -2009,6 +2009,7 @@ let randomColliders145 = [
   {presentage: "82.34270697", hex: "0x1e0ec547e5075b5d00b39a7be0aed37df1107"},
   {presentage: "82.37727203", hex: "0x1e0fbe757f47aea15adc841fc0d7cf73ebec0"},
   {presentage: "82.45721883", hex: "0x1e11fecad15610b13cc94017a09a39b39d294"},
+  {presentage: "82.48469475", hex: "0x1e12c4dd74e5b01d949070501f2737a7612d5"},
   {presentage: "82.52480296", hex: "0x1e13e600e86cc2495bd6a4eeb5a0786a7bc80"},
   {presentage: "82.58124344", hex: "0x1e157ce17628db7e5bf49f2e160370a48d257"},
   {presentage: "82.66490845", hex: "0x1e17d804b7277ca448fda86a757250880b5a4"},
