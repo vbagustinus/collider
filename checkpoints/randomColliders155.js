@@ -1930,6 +1930,7 @@ let randomColliders155 = [
   {presentage: "78.52133087", hex: "0x79b44ac9b90250ce5fdb18254bfb1169f0f0a9a"},
   {presentage: "78.62102356", hex: "0x79b9657ae1a62b55f7b6e3dfec6cd8ceec3f616"},
   {presentage: "78.63435322", hex: "0x79ba1431cc6707874412baa8ef0847327fc03ac"},
+  {presentage: "78.68307696", hex: "0x79bc92d38a5ec6bd71c39a51adfb2e11becce26"},
   {presentage: "78.73911737", hex: "0x79bf715bf402d7dcdc759d772ff373e6bdcae26"},
   {presentage: "78.74943174", hex: "0x79bff88d3c607ae16a0a2c4b2ef4d77a473b4a4"},
   {presentage: "78.80925494", hex: "0x79c308aa95e2a24383afc4cb98e78f6834bf1bc"},
