@@ -98,7 +98,12 @@ _col_lock_release() { rm -rf "$COL_ROOT/.git/sync_push.lock" 2>/dev/null; }
 # yang punya layout sibling akan mem-push versi terbaru ke cloud).
 _col_root_agents_refresh() {
   local up="$COL_ROOT/../AGENTS.md" dst="$COL_ROOT/root_agents.md"
-  [[ -f "$up" ]] || return 0
+  if [[ ! -f "$up" ]]; then
+    # Audit 2026-10-19: induk tidak ada di layout mesin ini (root_agents.md
+    # sempat beku berhari-hari tanpa sinyal) — kasih WARN, jangan senyap.
+    _col_log "WARN: ../AGENTS.md tidak ada — root_agents.md TIDAK bisa di-refresh (snapshot lama tetap dipakai)."
+    return 0
+  fi
   [[ -f "$dst" ]] || return 0
   $COL_GIT ls-files --error-unmatch -- root_agents.md >/dev/null 2>&1 || return 0
   cmp -s "$up" "$dst" && return 0
@@ -224,7 +229,12 @@ _col_foreign_match_alert() {
 # dalam hitungan detik; mirror menjaga kunci tidak pernah cuma ada di satu disk.
 _col_mirror_findings_ledger() {
   local src="$COL_ROOT/../KEYFOUNDKEYFOUND.txt" dst="$COL_ROOT/KEYFOUNDKEYFOUND.txt"
-  [[ -f "$src" ]] || return 0
+  if [[ ! -f "$src" ]]; then
+    # Audit 2026-10-19: ledger induk tidak ada di layout mesin ini — mirror
+    # senyap selama ini (risiko: temuan baru cuma numpuk di satu disk).
+    _col_log "WARN: ../KEYFOUNDKEYFOUND.txt tidak ada — mirror ledger temuan dilewati (ledger repo tetap utuh & ter-push)."
+    return 0
+  fi
   [[ -f "$dst" ]] || : > "$dst"
   local h0 h1
   h0="$($COL_GIT hash-object "$dst" 2>/dev/null)"
@@ -232,8 +242,11 @@ _col_mirror_findings_ledger() {
     if [[ ! -s "$dst" ]]; then
       cat "$src" >> "$dst"          # grep -f dgn pattern-file KOSONG = no match!
     else
-      # append HANYA baris yang belum ada di mirror (grep -FxF = exact-line)
-      grep -FxFf "$dst" "$src" >> "$dst" 2>/dev/null || true
+      # append HANYA baris yang belum ada di mirror (grep -FxF = exact-line).
+      # BUG diperbaiki 2026-10-19: tanpa -v, grep justru memilih baris yang
+      # SUDAH ada di dst -> append selalu nol efek setelah dedup, temuan root
+      # baru TIDAK PERNAH masuk (terbukti: ledger collider tertinggal 1 temuan).
+      grep -FxFvf "$dst" "$src" >> "$dst" 2>/dev/null || true
     fi
   fi
   # dedup baris persis (union-merge antar mesin bisa menghasilkan duplikat),
