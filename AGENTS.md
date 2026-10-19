@@ -41,7 +41,9 @@ Perintah untuk AI:
 
 ## Aturan wajib (semua komputer)
 1. **start-all / stop-all hanya lewat master runner.** Sudah otomatis:
-   sync pull+merge sebelum launch, commit+push saat stop, register driver
+   pull seluruh folder (kode/config/data/progress — bukan cuma log) sebelum
+   launch DAN sebelum final push saat stop (stop-all dulu tak pernah pull —
+   diperbarui 2026-10-19), commit+push saat stop, register driver
    union, idempotent (stop leftover dulu sebelum launch).
 2. **LOG SINGLE-SOURCE di repo ini.** `logs/` + `checkpoints/` di SINI adalah
    satu-satunya tempat progress resmi (bukan di repo root b1000). Jangan bikin

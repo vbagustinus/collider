@@ -100,15 +100,17 @@ case "$cmd" in
     else
       rm -f "$PID_DIR"/sweep_*.pid 2>/dev/null || true
     fi
+    # --- git sync: ambil perubahan TERBARU utk SELURUH folder dulu ---
+    # sync.sh registers the progressUnion driver (idempotent), pulls the WHOLE
+    # tree (kode/config/data/progress — BUKAN cuma log), stashing progress
+    # files saja, lalu memulai periodic two-way sync daemon. Pull dulu baru
+    # trim, biar trim tidak mengotori tree tepat sebelum pull.
+    echo "=== [sync] ambil perubahan terbaru — seluruh folder (kode/config/data/progress) ==="
+    sync_pull
+
     # --- trim log runtime biar logs/ nggak numpuk (metal.log ~1,4 MB/hari;
     #     pct_history / MATCH / .pids TIDAK disentuh — lihat tools/trim_logs.sh) ---
     bash "$B1000/tools/trim_logs.sh" || echo "WARN: trim_logs gagal (lanjut)"
-
-    # --- git sync: pull latest progress from cloud, then keep syncing while running ---
-    # sync.sh registers the progressUnion driver (idempotent), pulls with a
-    # progress-only stash, and starts the periodic two-way sync daemon.
-    echo "=== pulling latest progress from cloud ==="
-    sync_pull
 
     # --- PREFLIGHT GPU: selftest 16-bit wajib PASS sebelum sweep dimulai ---
     # (bug fe_add->fe_modadd di kangaroo.metal diperbaiki & terverifikasi
@@ -170,12 +172,20 @@ case "$cmd" in
       exit 1
     fi
     echo "all collider processes stopped (0 left)."
+    # --- git sync: ambil perubahan TERBARU utk SELURUH folder SEBELUM push ---
+    # Dulu stop-all TIDAK pernah pull: sync_push hanya pull sebagai reaksi
+    # push ditolak (non-FF) dan TIDAK SAMA SEKALI kalau tak ada commit lokal
+    # -> tree bisa stale. Sekarang pull eksplisit dulu (seluruh folder),
+    # baru trim, lalu flush push.
+    echo "=== [sync] ambil perubahan terbaru — seluruh folder (kode/config/data/progress) ==="
+    sync_pull
+
     # --- trim log runtime (proses udah mati, lsof nggak akan nge-skip) ---
     bash "$B1000/tools/trim_logs.sh" || echo "WARN: trim_logs gagal (lanjut)"
 
     # --- git sync: stop periodic daemon + final flush push to cloud ---
-    # sync_daemon_stop -> sync_push: normalize, commit, pull --rebase (union
-    # driver handles progress conflicts), push, retry on fetch-first.
+    # sync_daemon_stop -> sync_push: normalize, commit, push (+ auto pull-retry
+    # bila remote maju/non-FF). Union driver menangani overlap progress.
     echo "=== pushing final progress to cloud ==="
     sync_daemon_stop
     exit 0

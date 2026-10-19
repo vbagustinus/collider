@@ -5,7 +5,7 @@
 #   source "$B1000/runners/sync.sh"
 #
 # Public functions:
-#   sync_pull        — pull latest from origin/main (progress from other computers);
+#   sync_pull        — pull latest from origin/main — SELURUH tree (kode/config/data/progress dr komputer lain);
 #                      falls back to merge --autostash when the tree stays dirty
 #                      with NON-progress files (rebase refuses to run then)
 #   sync_push        — commit + push checkpoints / pct_history / FOUND files
