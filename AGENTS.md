@@ -18,17 +18,26 @@ Perintah untuk AI:
    commit + push via sync helper.
 3. Saat fresh clone di mesin baru, `root_agents.md` ikut ter-download otomatis
    (terlacak git) — AI langsung punya konteks penuh tanpa akses ke mesin lain.
+4. **Kondisi diketahui (audit 2026-10-19)**: `../AGENTS.md` dan
+   `../KEYFOUNDKEYFOUND.txt` tidak ada di beberapa mesin → snapshot bisa
+   beku dan mirror temuan dilewati. sync.sh kini mem-WARN tiap siklus kalau
+   file induk hilang (dulu senyap) — jangan anggap root_agents.md selalu
+   terbaru, dan jangan "memperbaiki" dengan membuat file di luar folder repo.
 
 ## Tujuan project
 - Sweep collider kangaroo (Metal GPU) untuk puzzle BTC p140/p145/p150/p155/p160
   via config `collider_jump_*_rnd.conf` (ENABLED=1). Master:
   `bash runners/run_all_colliders.sh start-all` / `stop-all` / `status`.
-- Target: pubkey compressed dari `data/btc_hex_puzzle_1_sampai_160+0x.txt`
-  (lihat repo root project). PUBKEY di config = 66-char kompres (02/03...) —
+- Target: pubkey compressed dari `../keyhunt/btc_hex_puzzle_1_sampai_160+0x.txt`
+  (sumber resmi id 1..160; folder `data/` di root project TIDAK ada di mesin
+  ini — audit 2026-10-19; 6/6 PUBKEY tervalidasi cocok dengan file itu).
+  PUBKEY di config = 66-char kompres (02/03...) —
   JANGAN pernah "memperbaiki" ke 65-char; itu bug lama yang sudah dibenerin.
-- Progress sekarang: kelima config ~99.8%+ via checkpoint kangaroo (lihat
-  `status`). Angka = persentase checkpoint kangaroo, beda semantik dgn
-  random-start keyhunt.
+- Progress: baca angka hidup dari `status`, JANGAN hardcode persentase di
+  dokumen ini. (Klaim "~99.8%+" ditulis 20 Sep 2026 dan basi setelah REVERT
+  2026-09-22 membuang entri era range baru; per 19 Okt nilai 26–91%.)
+  Angka = persentase checkpoint kangaroo = posisi round TERAKHIR, bukan
+  coverage penuh — beda semantik dgn random-start keyhunt.
 
 ## Aturan wajib (semua komputer)
 1. **start-all / stop-all hanya lewat master runner.** Sudah otomatis:
