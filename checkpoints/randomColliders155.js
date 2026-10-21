@@ -1977,6 +1977,7 @@ let randomColliders155 = [
   {presentage: "78.68307696", hex: "0x79bc92d38a5ec6bd71c39a51adfb2e11becce26"},
   {presentage: "78.73911737", hex: "0x79bf715bf402d7dcdc759d772ff373e6bdcae26"},
   {presentage: "78.74943174", hex: "0x79bff88d3c607ae16a0a2c4b2ef4d77a473b4a4"},
+  {presentage: "78.75690326", hex: "0x79c05a7b7f2fe98547db946e6a1e8a624caee2d"},
   {presentage: "78.80925494", hex: "0x79c308aa95e2a24383afc4cb98e78f6834bf1bc"},
   {presentage: "78.83431529", hex: "0x79c451232a9edc70fc0dfa60fc10a992d856bb0"},
   {presentage: "78.84784916", hex: "0x79c502874c6d9f7355eba28380b11df8412267a"},
