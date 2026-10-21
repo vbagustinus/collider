@@ -143,6 +143,32 @@ Detail:
   full-load bersamaan tanpa memantau RAM.
 - prefer foreground Metal run saat eksperimen; daemonized hanya utk sweep.
 
+## SLOT GRID PICK (2026-10-22) — anti-tumpang-tindih antar mesin
+- `runners/run_collider_jump.sh` kini memilih START_PCT **rata tepi slot** berukuran
+  `JUMP_PCT` (dedup = `presentage // JUMP_PCT`), bukan start acak dengan dedup
+  exact-hex seperti sebelumnya. Konsekuensi langsung: dua window dari dua slot
+  berbeda MUSTI saling lepas, jadi kerja GPU tidak pernah dobel.
+- **Mengapa diubah (audit 2026-10-22)**: dedup lama hanya menolak start yang persis
+  sama. Pasangan window overlap terukur = ekspektasi kebetulan murni (nol proteksi);
+  satu slot p140 pernah disapu 11x sementara ~8% slot tak pernah tersentuh, walau
+  area sudah disapu 257,9% dan coverage union mentok di 92,2%. Dengan `JUMP_PCT=0.1`
+  satu puzzle hanya punya **~1000 slot non-overlap** — jadi pemilihan acak lama
+  menyapu range itu 2,5x lipat tanpa pernah menutup sisa ~8%.
+- Entry LAMA di `checkpoints/randomColliders*.js` (posisi acak, non-rata-tepi) TIDAK
+  dihapus dan TIDAK di-resolve manual — dipetakan ke slot yang memuat start-nya.
+  Sisa kiri slot itu (<1 lebar slot) dianggap tercakup. Jangan "merapikan" angka
+  presentage lama ke rata-tepi: itu akan memindahkan hex dan merusak warisan revert.
+- Saat semua slot terpakai, runner berhenti dengan `RANGE KOMPLET` — sengaja, BUKAN
+  jatuh ke pick acak dobel seperti fallback lama. Kalau muncul, pilihan berikutnya:
+  `ENABLED=0` utk config itu, atau naikkan `JUMP_PCT` (perlu kesepakatan eksplisit —
+  lihat aturan config).
+- **Batas kejujuran**: ini menjamin "kangaroo pernah ditempatkan di tiap slot", BUKAN
+  enumerasi titik-per-titik. `main.m` menempatkan tame/wild pada jarak ACAK di dalam
+  window (`b_rndmax`) dan tiap round berakhir via `[timeout]`. Slot 100% ≠ penuh.
+- Jendela buta antar mesin MASIH ada: pick baru terlihat mesin lain setelah siklus
+  sync (default 3600s), bukan seketika. Slot-grid memperkecil dampaknya (sisa slot
+  makin sedikit) tapi belum menghapusnya — opsi reserve-saat-pick belum diambil.
+
 ## REVERT RANGE (2026-09-22, keputusan user — config kembali SUBRANGE asli)
 
 - **Config `configs/collider_jump_*_rnd.conf` := state pra-EXPAND** (commit

@@ -4,20 +4,32 @@
 # Random start + checkpoint hex handled by one quick python3 call per round
 # (big-int range math); no persistent helper process while the collider runs.
 #
-# Behavior (per user request):
-#   - Each TIME window, pick a random START_PCT (0..100-JUMP_PCT, 8 decimals).
+# Behavior (per user request; slot-grid sejak 2026-10-22):
+#   - Each TIME window, pick a START_PCT snapped to a fixed grid of JUMP_PCT-sized
+#     slots (0..100-JUMP_PCT, 8 decimals).
 #   - Collider scans only [START_PCT%, START_PCT%+JUMP_PCT%] of the puzzle range.
 #   - After TIME, re-randomize and run again, until a MATCH is found or you stop manually (Ctrl-C).
 #   - All used START_PCT values are appended to logs/<NAME>.pct_history.
 #   - A PERMANENT checkpoint is kept per puzzle in $B1000/checkpoints/randomColliders<PZ>.js:
 #       let randomColliders140 = [
-#         {presentage: "3.87654321", hex: "0x..."},
+#         {presentage: "3.87650000", hex: "0x..."},
 #       ]
-#     Dedup key = hex subrange. A random start whose hex was already scanned is
-#     skipped (fresh random); a start whose hex is NEW is always run, even when
-#     the same presentage appears with a different hex in the file (config range
-#     changed -> subrange moved). The object is appended/pushed to the checkpoint
-#     only after the round ends (time runs out), so it survives restarts.
+#     Dedup key = GRID SLOT (presentage // JUMP_PCT), bukan hex-start persis.
+#     Alasan (audit 2026-10-22, snapshot p140): dedup lama exact-start membuat
+#     pasangan window overlap terukur ~= ekspektasi kebetulan murni (6650 vs 6649),
+#     artinya proteksi anti-tumpang-tindih NOL. Akibatnya satu slot pernah disapu
+#     11x sementara ~8% slot tak pernah tersentuh, walau area disapu 257,9% dan
+#     coverage union mentok di 92,2%. (Angka slot ikut naik tiap merge remote —
+#     jangan kutip ulang tanpa re-audit.) Snap ke tepi slot membuat dua window dari
+#     dua slot berbeda MUSTI saling lepas -> kerja GPU tidak pernah dobel, dan slot
+#     bebas = satu-satunya target tersisa.
+#     CATATAN JUJUR: ini menjamin "kangaroo pernah ditempatkan di tiap slot", BUKAN
+#     enumerasi titik-per-titik. main.m menempatkan tame/wild pada jarak ACAK di dalam
+#     window (b_rndmax) dan tiap round berakhir via [timeout], bukan dengan menghabiskan
+#     window. Slot coverage 100% tetap != pemeriksaan menyeluruh.
+#     Entry LAMA (posisi acak, non-rata-tepi) dipetakan ke slot yang memuat start-nya;
+#     sisa kiri slot itu (<1 lebar slot) dianggap tercakup. Saat semua slot terpakai
+#     runner berhenti dengan "RANGE KOMPLET" — TIDAK pernah jatuh ke pick acak dobel.
 #
 # Usage: bash run_collider_jump.sh <configs/collider_jump_p<Puzzle>_rnd.conf> [seconds_per_round]
 set -u
@@ -123,7 +135,8 @@ CKPT_DIR="$B1000/checkpoints"; mkdir -p "$CKPT_DIR"
 CKPT="$CKPT_DIR/randomColliders${PUZZLE}.js"
 
 pick_random_start() {
-  # prints 2 lines: START_PCT (e.g. "3.87654321") and its lo-hex subrange start.
+  # prints 2 lines: START_PCT (e.g. "3.87650000") and its lo-hex subrange start.
+  # Atau satu baris "RANGE_COMPLETE" kalau semua slot grid sudah pernah dilalui.
   # On first run, seeds the checkpoint from the pct_history so already-scanned
   # subranges are never re-picked. One python3 call per round (~tens of ms).
   python3 - "$CONF" "$CKPT" "$PCT_HIST" "$JUMP_PCT" "$PUZZLE" <<'PY'
@@ -145,8 +158,6 @@ def toE8(s):
     return int(i) * 100000000 + int(f)
 
 jp = toE8(jump)
-RANGE = 10000000000 - jp            # max START_PCT in 1e-8 units
-if RANGE < 1: RANGE = 1
 
 def hex_at(e8):
     # FIX 2026-09-21: dulu //100000000 (bug ÷100, hex ckpt salah faktor 100 vs
@@ -164,25 +175,30 @@ def load_ckpt():
     return ents
 
 ents = load_ckpt()
-seen = {h for _, h in ents}
 
-# honour historical rounds (logs/<NAME>.pct_history) UNCONDITIONALLY, not just
-# at seed time: a subrange that was ever started is never re-picked, even if the
-# checkpoint file is incomplete (e.g. the round was killed between the history
-# append and the checkpoint append).
+# ---- SLOT GRID (audit 2026-10-22) ----------------------------------------
+# Ukuran slot = JUMP_PCT, jadi dua window dari dua slot BERBEDA saling lepas
+# secara konstruksi. Sebelumnya dedup hanya cek hex-start persis: pasangan
+# overlap terukur ~= ekspektasi kebetulan murni (= nol proteksi), satu slot
+# pernah disapu 11x, dan ~8% slot tak pernah tersentuh.
+NSLOTS = 10000000000 // jp
+used = set()
+for _p, _h in ents:
+    used.add(toE8(_p) // jp)
+
+# honour historical rounds (logs/<NAME>.pct_history) UNCONDITIONALLY: sebuah
+# slot yang pernah dimulai tidak pernah dipilih ulang, walau checkpoint belum
+# sempat terisi (round dibunuh di antara append history dan append checkpoint).
 hist_hex = []
-hist_seen = set()
 if os.path.exists(hist):
     for ln in open(hist):
         s = ln.strip()
         if re.fullmatch(r"\d+\.\d+", s):
             e8 = toE8(s)
-            if e8 < RANGE:
-                h = hex_at(e8)
-                if h not in hist_seen:
-                    hist_seen.add(h)
-                    seen.add(h)
-                    hist_hex.append((s, h))
+            if e8 < 10000000000:
+                used.add(e8 // jp)
+            if e8 <= 10000000000 - jp:
+                hist_hex.append((s, hex_at(e8)))
 
 # seed the checkpoint file once (only when empty/missing); atomic via rename.
 if not ents:
@@ -193,19 +209,17 @@ if not ents:
         f.write("]\n")
     os.replace(ckpt + ".tmp", ckpt)
 
-# pick a random start whose subrange has never been scanned.
-random.seed()
-for _ in range(2000000):
-    e8 = random.randrange(RANGE)
-    h = hex_at(e8)
-    if h not in seen:
-        print("%d.%08d" % (e8 // 100000000, e8 % 100000000))
-        print(h)
-        break
-else:
-    e8 = random.randrange(RANGE)
-    print("%d.%08d" % (e8 // 100000000, e8 % 100000000))
-    print(hex_at(e8))
+# pick a FREE slot; start diratakan tepat ke tepi slot -> window tidak mungkin
+# tumpang tindih. Tanpa slot bebas = range komplet (bukan fallback acak dobel).
+free = [i for i in range(NSLOTS) if i not in used]
+if not free:
+    sys.stdout.write("RANGE_COMPLETE\n")
+    raise SystemExit(0)
+
+slot = random.choice(free)
+e8 = slot * jp
+sys.stdout.write("%d.%08d\n" % (e8 // 100000000, e8 % 100000000))
+sys.stdout.write(hex_at(e8) + "\n")
 PY
 }
 
@@ -220,6 +234,13 @@ append_checkpoint() {   # $1=presentage  $2=lo-hex  (call after the round ends)
     fi
   done
   trap 'rmdir "$lockdir" 2>/dev/null' EXIT
+  # idempoten: hex yang SUDAH tercatat tidak ditulis ulang. Dua jalur bisa
+  # menyentuh round yang sama — _on_stop (TERM/INT di tengah round) dan jalur
+  # normal setelah binary keluar — sehingga slot yang sama bisa kecatat dobel
+  # dan memakan slot bebas yang sah.
+  if grep -qF "hex: \"$2\"" "$CKPT" 2>/dev/null; then
+    rmdir "$lockdir" 2>/dev/null; trap - EXIT; return 0
+  fi
   local tmp="$CKPT.tmp"
   sed '$d' "$CKPT" > "$tmp"
   printf '  {presentage: "%s", hex: "%s"},\n]\n' "$1" "$2" >> "$tmp"
@@ -248,6 +269,12 @@ trap _on_stop INT TERM
 while :; do
   pick_out="$(pick_random_start)"
   PCT="${pick_out%%$'\n'*}"; HEX="${pick_out#*$'\n'}"
+  if [[ "$PCT" == "RANGE_COMPLETE" || -z "$HEX" ]]; then
+    echo "[$(date +%FT%T)] [$name] RANGE KOMPLET: semua slot grid (ukuran ${JUMP_PCT}%) sudah pernah dilalui."
+    echo "[$(date +%FT%T)] [$name] Tidak ada window baru yang legal — berhenti, bukan pick acak dobel."
+    echo "[$(date +%FT%T)] [$name] (catatan: ini = kangaroo pernah ditempatkan di tiap slot, bukan enumerasi titik-per-titik.)"
+    break
+  fi
   _IN_ROUND=1
   echo "$PCT" >> "$PCT_HIST"
   pi=$(( 10#${PCT%%.*} * 100000000 + 10#${PCT#*.} ))
