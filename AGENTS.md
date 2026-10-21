@@ -18,10 +18,12 @@ Perintah untuk AI:
    commit + push via sync helper.
 3. Saat fresh clone di mesin baru, `root_agents.md` ikut ter-download otomatis
    (terlacak git) — AI langsung punya konteks penuh tanpa akses ke mesin lain.
-4. **Kondisi diketahui (audit 2026-10-19)**: `../AGENTS.md` dan
-   `../KEYFOUNDKEYFOUND.txt` tidak ada di beberapa mesin → snapshot bisa
-   beku dan mirror temuan dilewati. sync.sh kini mem-WARN tiap siklus kalau
-   file induk hilang (dulu senyap) — jangan anggap root_agents.md selalu
+4. **Kondisi diketahui (audit 2026-10-19; perilaku log diperbarui 2026-10-22)**:
+   `../AGENTS.md` dan `../KEYFOUNDKEYFOUND.txt` tidak ada di beberapa mesin.
+   Kalau file induk hilang, mirror temuan dilewati **senyap** — WARN per-siklus
+   dihapus 2026-10-22 karena ketiadaan ledger induk adalah layout yang sah, bukan
+   kegagalan; temuan tetap aman di `logs/FOUND_p<PZ>.txt` (terlacak git, ter-push
+   tiap siklus). Yang MASIH berlaku: jangan anggap `root_agents.md` selalu
    terbaru, dan jangan "memperbaiki" dengan membuat file di luar folder repo.
 
 ## Tujuan project

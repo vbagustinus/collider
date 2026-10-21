@@ -230,9 +230,11 @@ _col_foreign_match_alert() {
 _col_mirror_findings_ledger() {
   local src="$COL_ROOT/../KEYFOUNDKEYFOUND.txt" dst="$COL_ROOT/KEYFOUNDKEYFOUND.txt"
   if [[ ! -f "$src" ]]; then
-    # Audit 2026-10-19: ledger induk tidak ada di layout mesin ini — mirror
-    # senyap selama ini (risiko: temuan baru cuma numpuk di satu disk).
-    _col_log "WARN: ../KEYFOUNDKEYFOUND.txt tidak ada — mirror ledger temuan dilewati (ledger repo tetap utuh & ter-push)."
+    # TIDAK ADA LOG: ketiadaan ledger induk adalah layout yang SAH, bukan
+    # kondisi gagal. Temuan tidak pernah cuma numpuk di satu disk karena
+    # runner sudah menulis logs/FOUND_p<PZ>.txt (terlacak git + ter-push tiap
+    # siklus sync), dan mirror repo ini ikut ter-commit. Jangan kembalikan
+    # WARN-nya — tiap siklus log-nya jadi spam tanpa aksi yang mungkin.
     return 0
   fi
   [[ -f "$dst" ]] || : > "$dst"
