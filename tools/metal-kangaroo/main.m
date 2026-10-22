@@ -88,6 +88,7 @@ static Jac J_DOUBLE(Jac p){ if(b_iszero(p.Z))return p;
   B256 Y3=b_modsub(b_mulmod(E,DmX3), b_mulmod(b_setu(8),C));
   B256 Z3=b_mulmod(b_setu(2), b_mulmod(p.Y,p.Z));
   Jac r; r.X=X3;r.Y=Y3;r.Z=Z3; return r; }
+static Jac J_NEG(Jac p){ Jac r; r.X=p.X; r.Y=b_modsub(b_setu(0),p.Y); r.Z=p.Z; return r; } // pakai PRIME, bukan ORDER
 static Jac J_ADD(Jac p,Jac q){
   if(b_iszero(p.Z)) return q;
   if(b_iszero(q.Z)) return p;
@@ -153,7 +154,7 @@ static uint64_t hash256(B256 x){ uint64_t h=x.w[0]^x.w[1]^x.w[2]^x.w[3]^x.w[4]^x
 static int check_k(B256 c, B256* out){ // c = k' candidate (k'*G == Qdash). returns 1 if verified
   Jac P=J_MUL(G,c); B256 cx=J_X(P);
   if(b_cmp(cx,g_QdashX)!=0){ return 0; }
-  B256 k=b_modn(b_sub(c,g_x32));
+  B256 k=b_addmodn(c,g_x32); // k = c + A mod n  (c = k - A)
   Jac Pk=J_MUL(G,k); B256 kx=J_X(Pk);
   if(b_cmp(kx,g_QX)!=0){ return 0; }
   if(out) *out=k;
@@ -335,10 +336,19 @@ int main(int argc, char** argv){
   } else {
     windowW=b_setu(0); for(int i=0;i<34;i++) windowW=b_add(windowW,x32o);
   }
-  g_x32=b_add(x32o,startOff);
+  // ---- Geometri jendela: window = [rangeHalf+startOff .. +windowW] ----
+  // PntWild = -Qdash = (A-k)*G dengan A = rangeHalf+startOff, sehingga celah
+  // tame<->wild = |A-k| <= windowW ketika k jatuh di dalam window.
+  // (lama: g_x32 = x32o+startOff -> celah >= 2^(Range-1): mode -p tak pernah tembus)
+  // Catatan: g_x32 disimpan POSITIF (=A) karena check_k menghitung k = c + A.
+  // Jangan diganti -A mod n: b_sub wrap 2^256 dan b_modn hanya kurangi n sekali.
+  g_x32=b_add(rangeHalf,startOff);
   B256 tameTop=(b_cmp(x32o,windowW)<0)?x32o:windowW;
   tameTop=b_sub(tameTop,b_setu(1));
-  Jac Qdash=J_ADD(Q, J_MUL(G,g_x32));
+  // Qdash = Q - A*G = (k-A)*G. Dihitung via negasi titik, BUKAN skalar besar:
+  // konstanta ORDER di file ini ternyata bukan n sejati secp256k1 (n*G != O),
+  // jadi (n-A)*G tidak sama dengan -A*G dan jalur itu menghasilkan titik salah.
+  Jac Qdash=J_ADD(Q, J_NEG(J_MUL(G,g_x32)));
   g_QX=J_X(Q); g_QdashX=J_X(Qdash);
   Jac PntWild; PntWild.X=J_X(Qdash); PntWild.Y=b_modsub(b_setu(0),J_Y(Qdash)); PntWild.Z=b_setu(1);
   B256 wY=J_Y(PntWild);
