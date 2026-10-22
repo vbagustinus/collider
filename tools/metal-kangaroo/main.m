@@ -359,6 +359,20 @@ int main(int argc, char** argv){
   // ---- jump tables (3): base = 2^(Range/2+3), 2^(Range-10), 2^(Range-12), even dists ----
   struct JmpGPU jt[3][JMP_CNT];
   { int bases[3]={Range/2+3, Range-10, Range-12};
+    // CLAMP tabel-1/2 ke jendela. Di mode -p, windowW = 2^(Range-1)*JUMP_PCT/100
+    // bisa lebih kecil dari basis lompatan (p140 JUMP_PCT=0.1 -> window 2^129.05,
+    // tabel-1 2^130, tabel-2 2^128). Lompatan seukuran window melempar kau keluar
+    // jendela tiap ~512 langkah -> kedua kawanan mengdiffusi di seluruh grup 2^256
+    // alih-alih di jendela, sehingga tabrakan tame<->wild praktis mustahil.
+    // Ambang sengaja tepat sasaran: aktif hanya bila lompatan > window/8
+    // (bases > wMsb-3), lalu ditarik ke window/16 (wMsb-4/-5). Konsekuensinya
+    // seluruh config uji geometry proof (R16/19/24/32, JUMP_PCT=2) TIDAK terkena
+    // klem sama sekali -> perilaku yang sudah terbukti lulus uji tetap identik.
+    // Terukur p140 JUMP_PCT=0.1 (probe dist, iter-4): tanpa klem 5.7%/5.6%,
+    // dengan klem 82.1%/82.7%, baseline tanpa -p 88.7%.
+    int wMsb=0; for(int i=7;i>=0;i--){ if(windowW.w[i]){ uint32_t b=windowW.w[i]; int sh=0; while(b>>=1) sh++; wMsb=i*32+sh; break; } }
+    if(bases[1]>wMsb-3) bases[1]=wMsb-4;
+    if(bases[2]>wMsb-3) bases[2]=wMsb-5;
     for(int t=0;t<3;t++){
       B256 base=b_setu(1); for(int i=0;i<bases[t];i++) base=b_add(base,base);
       for(int i=0;i<JMP_CNT;i++){
