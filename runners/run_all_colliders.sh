@@ -61,10 +61,11 @@ stop_everything() {
 
 ### Internal master loop -----------------------------------------------
 if [[ "${1:-}" == "--loop" ]]; then
-  ROUND="${2:-600}"
+  ROUND="${2-}"           # kosong (start-all tanpa arg) = ikut TIME di config
   KANGS="${3:-}"
+  ROUND_DESC="${ROUND:+${ROUND}s}"; ROUND_DESC="${ROUND_DESC:-config TIME}"
   rm -f "$STOP_FILE"                      # never block a fresh sweep
-  echo "=== [sweep] master pid $$ @ $(date +%FT%T), round=${ROUND}s ==="
+  echo "=== [sweep] master pid $$ @ $(date +%FT%T), round=${ROUND_DESC} ==="
   PASS=0
   while :; do
     PASS=$((PASS+1))
@@ -74,7 +75,7 @@ if [[ "${1:-}" == "--loop" ]]; then
       [[ "$(get_field ENABLED "$CONF")" == "1" ]] || continue
       if [[ -f "$STOP_FILE" ]]; then echo "=== [sweep] STOP flag, stopping."; rm -f "$STOP_FILE"; exit 0; fi
       NAME="$(get_field NAME "$CONF")"; NAME="${NAME%.metal}"
-      echo "  >>> [sweep] $(basename "$CONF") round=${ROUND}s ..."
+      echo "  >>> [sweep] $(basename "$CONF") round=${ROUND_DESC} ..."
       if [[ -n "$KANGS" ]]; then
         COLLIDER_ONCE=1 KANGS="$KANGS" bash "$RUNNER" "$CONF" "$ROUND"
       else
@@ -89,8 +90,9 @@ fi
 case "$cmd" in
 
   start-all)
-    ROUND="${2:-600}"
+    ROUND="${2-}"        # kosong = ikut TIME di config tiap collider_jump_*.conf
     KANGS="${3:-}"
+    ROUND_DESC="${ROUND:+${ROUND}s}"; ROUND_DESC="${ROUND_DESC:-config TIME}"
     if alive "$(master_pid)"; then
       echo "colliders ALREADY running (pid $(master_pid)). Re-launching cleanly..."
       stop_everything
@@ -146,7 +148,7 @@ case "$cmd" in
     if alive "$(master_pid)"; then
       tools_pids="$(pgrep -f 'collider/tools/metal-kangaroo/metal-kangaroo' | tr '\n' ' ')"
       echo "=== colliders STARTED (master pid $(master_pid)) ==="
-      echo "Round: ${ROUND}s/config | sweeping all ENABLED collider_jump_*_rnd.conf"
+      echo "Round: ${ROUND_DESC}/config | sweeping all ENABLED collider_jump_*_rnd.conf"
       echo "Log: $SCHED_LOG"
       echo "--- last lines ---"; tail -n 3 "$SCHED_LOG" 2>/dev/null
       exit 0

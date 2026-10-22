@@ -39,6 +39,14 @@ METAL_DIR="$B1000/tools/metal-kangaroo"
 METAL_BIN="${METAL_BIN:-$METAL_DIR/metal-kangaroo}"
 LOG_DIR="$B1000/logs"; mkdir -p "$LOG_DIR"
 
+# Anti-sleep: round panjang (TIME=2400 detik) mati kalau Mac tidur.
+# caffeinate hidup sepanjang proses metal-kangaroo; kalau binarnya tidak ada
+# (mis. CI/Linux) kita jalankan polos — jalan tanpa perlindungan, bukan gagal.
+CAFF="$(command -v caffeinate 2>/dev/null || true)"
+run_metal() {
+  if [[ -n "$CAFF" ]]; then "$CAFF" -i "$@"; else "$@"; fi
+}
+
 # --- portable: build the Metal binary for THIS Mac if missing / wrong arch ---
 ensure_metal_bin() {
   local need=0
@@ -287,9 +295,9 @@ while :; do
   if [[ -z "$RK" ]]; then RK="$(grep -iE "^KANGS=" "$CONF" | head -1 | cut -d= -f2- | tr -d " \r")"; fi
   echo "[kangs] using pool=$RK ($( [[ -n "${KANGS:-}" ]] && echo env || [[ -n "${COLLIDER_FIXEDKANGS:-}" ]] && echo config || echo auto-device ))"
   if [[ -n "$RK" ]]; then
-    "$METAL_BIN" "$CONF" -t "$TIME" -p "$PCT" "$RK" >> "$log" 2>&1
+    run_metal "$METAL_BIN" "$CONF" -t "$TIME" -p "$PCT" "$RK" >> "$log" 2>&1
   else
-    "$METAL_BIN" "$CONF" -t "$TIME" -p "$PCT" >> "$log" 2>&1
+    run_metal "$METAL_BIN" "$CONF" -t "$TIME" -p "$PCT" >> "$log" 2>&1
   fi
   rc=$?
   # round ended (time out OR solved): record the random start permanently.
