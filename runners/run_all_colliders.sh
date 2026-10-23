@@ -40,8 +40,9 @@ master_pid() { cat "$MASTER_PID" 2>/dev/null; }
 # All pids we consider "ours": master, runner bash, metal binary.
 # NOTE: patterns must NOT appear in this script's own cmdline (they don't).
 collider_pids() {
-  pgrep -f "collider/runners/run_collider_jump.sh" 2>/dev/null
-  pgrep -f "collider/tools/metal-kangaroo/metal-kangaroo" 2>/dev/null
+  pgrep -f "$B1000/runners/run_collider_jump.sh" 2>/dev/null
+  pgrep -f "$B1000/tools/metal-kangaroo/metal-kangaroo" 2>/dev/null
+  pgrep -f "$B1000/configs/collider_jump_[a-z0-9]*_rnd\.conf" 2>/dev/null   # renamed binaries
   local m; m="$(master_pid)"; alive "$m" && echo "$m"
 }
 
@@ -50,11 +51,14 @@ stop_everything() {
   local m
   rm -f "$STOP_FILE" 2>/dev/null
   m="$(master_pid)"; if alive "$m"; then kill -TERM "$m" 2>/dev/null; fi
-  pkill -TERM -f "run_collider_jump.sh" 2>/dev/null
-  pkill -TERM -f "collider/tools/metal-kangaroo/metal-kangaroo" 2>/dev/null
+  pkill -TERM -f "$B1000/runners/run_collider_jump.sh" 2>/dev/null
+  pkill -TERM -f "$B1000/tools/metal-kangaroo/metal-kangaroo" 2>/dev/null
+  # worker yang binary-nya di-rename (mis. ./esc, ./c2) — match via config di cmdline
+  pkill -TERM -f "$B1000/configs/collider_jump_[a-z0-9]*_rnd\.conf" 2>/dev/null
   sleep 2
-  pkill -9 -f "run_collider_jump.sh" 2>/dev/null
-  pkill -9 -f "collider/tools/metal-kangaroo/metal-kangaroo" 2>/dev/null
+  pkill -9 -f "$B1000/runners/run_collider_jump.sh" 2>/dev/null
+  pkill -9 -f "$B1000/tools/metal-kangaroo/metal-kangaroo" 2>/dev/null
+  pkill -9 -f "$B1000/configs/collider_jump_[a-z0-9]*_rnd\.conf" 2>/dev/null
   rm -f "$MASTER_PID" 2>/dev/null
   sleep 1
 }
@@ -146,7 +150,7 @@ case "$cmd" in
     disown 2>/dev/null || true
     sleep 1
     if alive "$(master_pid)"; then
-      tools_pids="$(pgrep -f 'collider/tools/metal-kangaroo/metal-kangaroo' | tr '\n' ' ')"
+      tools_pids="$(pgrep -f "$B1000/tools/metal-kangaroo/metal-kangaroo" | tr '\n' ' ')"
       echo "=== colliders STARTED (master pid $(master_pid)) ==="
       echo "Round: ${ROUND_DESC}/config | sweeping all ENABLED collider_jump_*_rnd.conf"
       echo "Log: $SCHED_LOG"
@@ -161,11 +165,14 @@ case "$cmd" in
     echo "=== stopping ALL collider processes ==="
     rm -f "$STOP_FILE" 2>/dev/null   # ensure a clean flag state
     m="$(master_pid)"; if alive "$m"; then kill -TERM "$m" 2>/dev/null; fi
-    pkill -TERM -f "run_collider_jump.sh" 2>/dev/null
-    pkill -TERM -f "collider/tools/metal-kangaroo/metal-kangaroo" 2>/dev/null
+    pkill -TERM -f "$B1000/runners/run_collider_jump.sh" 2>/dev/null
+    pkill -TERM -f "$B1000/tools/metal-kangaroo/metal-kangaroo" 2>/dev/null
+    # worker yang binary-nya di-rename (mis. ./esc, ./c2) — match via config di cmdline
+    pkill -TERM -f "$B1000/configs/collider_jump_[a-z0-9]*_rnd\.conf" 2>/dev/null
     sleep 2
-    pkill -9 -f "run_collider_jump.sh" 2>/dev/null
-    pkill -9 -f "collider/tools/metal-kangaroo/metal-kangaroo" 2>/dev/null
+    pkill -9 -f "$B1000/runners/run_collider_jump.sh" 2>/dev/null
+    pkill -9 -f "$B1000/tools/metal-kangaroo/metal-kangaroo" 2>/dev/null
+    pkill -9 -f "$B1000/configs/collider_jump_[a-z0-9]*_rnd\.conf" 2>/dev/null
     rm -f "$MASTER_PID" 2>/dev/null
     sleep 1
     leftover="$(collider_pids)"
@@ -202,7 +209,7 @@ case "$cmd" in
     fi
     echo
     echo "GPU processes:"
-    pgrep -fl "collider/tools/metal-kangaroo/metal-kangaroo" 2>/dev/null || echo "  (none)"
+    pgrep -fl "$B1000/tools/metal-kangaroo/metal-kangaroo" 2>/dev/null || echo "  (none)"
     echo
 printf "%-5s %-8s %-8s %-6s %-10s %-6s %s\n" "#Puz" "ENABLED" "CONF" "state" "scan%" "ckpt" "subrange (live / last history)"
     for CONF in "$CONF_DIR"/collider_j*_rnd.conf; do
@@ -214,7 +221,7 @@ printf "%-5s %-8s %-8s %-6s %-10s %-6s %s\n" "#Puz" "ENABLED" "CONF" "state" "sc
       CKPT_FILE="$B1000/checkpoints/randomColliders${PUZ}.js"
       ckpt_n="0"
       [[ -f "$CKPT_FILE" ]] && ckpt_n="$(grep -c 'presentage:' "$CKPT_FILE" 2>/dev/null)"
-      line=$(pgrep -fl "collider/tools/metal-kangaroo/metal-kangaroo $CONF" 2>/dev/null | head -1)
+      line=$(pgrep -fl "$B1000/tools/metal-kangaroo/metal-kangaroo $CONF" 2>/dev/null | head -1)
       if [[ -n "$line" ]]; then
         state="ACTIVE"
         pctval=$(echo "$line" | sed -nE 's/.*-p ([0-9.]+).*/\1/p')
