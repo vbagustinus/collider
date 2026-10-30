@@ -169,6 +169,35 @@ Detail:
   sync (default 3600s), bukan seketika. Slot-grid memperkecil dampaknya (sisa slot
   makin sedikit) tapi belum menghapusnya — opsi reserve-saat-pick belum diambil.
 
+## GRID 0.01 + ANTI BUSY-LOOP (2026-10-30)
+- **Insiden**: `start-all` sehat (preflight `selftest: PASS`, master lahir), tapi
+  grid 0.1% sudah terpakai **1000/1000 slot** di kelima puzzle -> tiap config balik
+  `RANGE KOMPLET` seketika. Master lama tidak tahu bedanya: ia mengulang pass
+  tanpa jeda (PASS 34.411+, 22.677 baris RANGE KOMPLET, `sweep_scheduler.log` 14 MB,
+  **0 kerja GPU**).
+- **Fix 1 (runner)**: `run_collider_jump.sh` keluar dengan **rc=99** saat
+  `RANGE_COMPLETE` (beda dari rc=0 "round normal selesai").
+- **Fix 2 (master)**: `run_all_colliders.sh --loop` melacak rc tiap config. Kalau
+  SEMUA config ENABLED balik rc=99 -> log sekali + **exit 0** (bukan spin). Guard
+  tambahan: pass selesai <5 dtk -> `sleep 60`. Pass tanpa config ENABLED -> exit 0.
+- **Fix 3 (sync daemon)**: subshell daemon di `runners/sync.sh` kini redirect
+  I/O ke `logs/sync_daemon.log` (`>>... 2>&1 </dev/null`). Sebelumnya daemon
+  mewarisi stdout pemanggil sehingga `start-all | tail` / command substitution
+  **tidak pernah EOF** (pemanggil menggantung lalu membunuh master + round hidup).
+  Patch identik diterapkan di `keyhunt/runners/sync.sh`.
+- **Perubahan config (disetujui user 2026-10-30)**: `JUMP_PCT` 0.1 -> **0.01** untuk
+  p140/145/150/155/160. Slot jadi 10.000/puzzle dengan sisa bebas terukur:
+  p140 7.600 | p145 7.666 | p150 7.708 | p155 7.702 | p160 7.697. Properti
+  anti-tumpang-tindih tetap (window == slot == 0.01%, dua window MUSTI lepas).
+  Jump table binary otomatis clamp ke window (`main.m`, `bases[1]/[2]`), jadi
+  geometri tetap konsisten; throughput terukur tetap ~1,3 Mops/s, DP/HT normal.
+- **Batas kejujuran (jangan lupa)**: "slot habis" BUKAN "range disapu". Satu window
+  0.1% p140 butuh ~2^65,5 ops; satu round 2400s = ~2,8e9 ops (≈2^31,4) = 5e-11
+  dari satu window. Kebutuhan penuh p140 ~2^70,5 ops ≈ 35 juta tahun di M2
+  (1,5 Mops/s). Jadi 0 match sampai sekarang = konsekuensi skala, bukan bug.
+  Target yang realistis (snapshot saldo 2026-09-21): **p71 7,10 BTC ≈ 18 jam**,
+  p72 ≈ 36 jam, p73 ≈ 3 hari, p74 ≈ 6 hari, p76 ≈ 12 hari (p75/p80 sudah SWEPT).
+
 ## REVERT RANGE (2026-09-22, keputusan user — config kembali SUBRANGE asli)
 
 - **Config `configs/collider_jump_*_rnd.conf` := state pra-EXPAND** (commit

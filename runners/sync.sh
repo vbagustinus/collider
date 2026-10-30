@@ -470,6 +470,10 @@ sync_daemon() {
       return 0
     fi
   fi
+  # Redirect daemon I/O ke file log: subshell ini mewarisi stdout pemanggil, dan
+  # tanpa redirect dia MEMEGANG pipe tetap terbuka -> `start-all | tail` / subshell
+  # command-substitution tidak pernah EOF (insiden 2026-10-30: start-all tampak
+  # hang 5 menit lalu terbunuh bersama master + round yang sedang jalan).
   (
     trap '_col_lock_release; exit 0' TERM INT
     while :; do
@@ -478,7 +482,7 @@ sync_daemon() {
       sync_pull
       sync_push
     done
-  ) &
+  ) >>"$COL_ROOT/logs/sync_daemon.log" 2>&1 </dev/null &
   COL_SYNC_DAEMON_PID=$!
   echo "$COL_SYNC_DAEMON_PID" > "$pf"
   ps -p "$COL_SYNC_DAEMON_PID" -o lstart= > "$pf_start" 2>/dev/null

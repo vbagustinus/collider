@@ -5,6 +5,7 @@ tools/metal-kangaroo/metal-kangaroo
 logs/*.metal.log
 logs/sweep_scheduler.log
 logs/daemon_launch.log
+logs/sync_daemon.log
 logs/.col_found_seen
 logs/.pids/
 tools/sweep/sweep_done.log

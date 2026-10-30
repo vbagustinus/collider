@@ -74,20 +74,45 @@ if [[ "${1:-}" == "--loop" ]]; then
   while :; do
     PASS=$((PASS+1))
     echo "=== [sweep] PASS $PASS @ $(date +%FT%T) ==="
+    PASS_T0=$(date +%s)
+    RAN=0                 # config yang benar-benar dijalankan di pass ini
+    ALL_COMPLETE=1        # tetap 1 hanya kalau SEMUA config balik rc=99 (grid habis)
     for CONF in "$CONF_DIR"/collider_jump_*_rnd.conf; do
       [[ -f "$CONF" ]] || continue
       [[ "$(get_field ENABLED "$CONF")" == "1" ]] || continue
       if [[ -f "$STOP_FILE" ]]; then echo "=== [sweep] STOP flag, stopping."; rm -f "$STOP_FILE"; exit 0; fi
       NAME="$(get_field NAME "$CONF")"; NAME="${NAME%.metal}"
       echo "  >>> [sweep] $(basename "$CONF") round=${ROUND_DESC} ..."
+      RAN=$((RAN+1))
       if [[ -n "$KANGS" ]]; then
         COLLIDER_ONCE=1 KANGS="$KANGS" bash "$RUNNER" "$CONF" "$ROUND"
       else
         COLLIDER_ONCE=1 bash "$RUNNER" "$CONF" "$ROUND"
       fi
-      echo "  <<< [sweep] done $(basename "$CONF")"
+      rc=$?
+      [[ "$rc" -eq 99 ]] || ALL_COMPLETE=0
+      echo "  <<< [sweep] done $(basename "$CONF") (rc=$rc)"
       if [[ -f "$STOP_FILE" ]]; then echo "=== [sweep] STOP during run, stopping."; rm -f "$STOP_FILE"; exit 0; fi
     done
+    # --- anti busy-loop ---
+    # Kalau semua config sudah RANGE KOMPLET, tiap pass selesai dalam hitungan
+    # detik tanpa GPU sama sekali. Berhenti rapi (bukan spin 34k pass / 14 MB log).
+    if [[ "$RAN" -eq 0 ]]; then
+      echo "=== [sweep] tidak ada config ENABLED=1 — master berhenti."
+      exit 0
+    fi
+    if [[ "$ALL_COMPLETE" -eq 1 ]]; then
+      echo "=== [sweep] SEMUA config ENABLED berstatus RANGE KOMPLET (grid JUMP_PCT habis)."
+      echo "=== [sweep] Master berhenti: tidak ada window baru yang legal. 0 kerja GPU kalau diteruskan."
+      echo "=== [sweep] Opsi: turunkan JUMP_PCT (grid lebih halus) atau ENABLED=0 (lihat collider/AGENTS.md)."
+      exit 0
+    fi
+    # jaring pengaman lain: pass yang selesai <5 dtk hampir pasti tanpa kerja nyata
+    PASS_DT=$(( $(date +%s) - PASS_T0 ))
+    if [[ "$PASS_DT" -lt 5 ]]; then
+      echo "=== [sweep] pass terlalu cepat (${PASS_DT}s, tanpa kerja berarti) — jeda 60s sebelum pass berikutnya."
+      sleep 60
+    fi
   done
 fi
 

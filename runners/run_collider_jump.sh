@@ -281,6 +281,10 @@ while :; do
     echo "[$(date +%FT%T)] [$name] RANGE KOMPLET: semua slot grid (ukuran ${JUMP_PCT}%) sudah pernah dilalui."
     echo "[$(date +%FT%T)] [$name] Tidak ada window baru yang legal — berhenti, bukan pick acak dobel."
     echo "[$(date +%FT%T)] [$name] (catatan: ini = kangaroo pernah ditempatkan di tiap slot, bukan enumerasi titik-per-titik.)"
+    # rc=99 khusus utk master: bedakan "tidak ada kerja" (grid habis, keluar
+    # seketika) dari "round normal selesai". Tanpa sinyal ini master lama
+    # busy-loop: 22.677 baris RANGE KOMPLET / 14 MB log / 0 kerja GPU (2026-10-30).
+    RANGE_DONE=1
     break
   fi
   _IN_ROUND=1
@@ -353,3 +357,7 @@ while :; do
   fi
 done
 echo "=== [$name] loop ended ==="
+# rc=99 = grid habis (bukan round selesai). Master memakainya untuk berhenti
+# rapi alih-alih spin; lihat master loop di run_all_colliders.sh.
+if [[ "${RANGE_DONE:-0}" -eq 1 ]]; then exit 99; fi
+exit 0
