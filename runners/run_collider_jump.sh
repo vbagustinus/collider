@@ -86,11 +86,12 @@ auto_kangs() {
   ram_gb=$(( ($(sysctl -n hw.memsize 2>/dev/null || echo 17179869184) ) / 1073741824 ))
   # GPU-family defaults (matches main.m maxKangs caps)
   case "$gpu_name" in
-    *M4*Max*)   k=20000 ;;
-    *M4*Pro*)   k=12000 ;;
-    *M4*|*M2*)  k=6000  ;;
-    *M1*)       k=4096  ;;
-    *)          k=$(( ram_gb * 512 )) ;;   # fallback: RAM-based estimate
+    *M4*Max*|*M2*Max*)   k=20000 ;;
+    *M4*Pro*|*M2*Pro*)   k=12000 ;;
+    *M4*)                k=10240 ;; # 10 GPU cores saturation
+    *M2*)                k=8192  ;; # M2 8/10 GPU cores optimal
+    *M1*)                k=4096  ;;
+    *)                   k=$(( ram_gb * 512 )) ;;   # fallback: RAM-based estimate
   esac
   [[ $k -lt 2048 ]] && k=2048
   [[ $k -gt 65536 ]] && k=65536

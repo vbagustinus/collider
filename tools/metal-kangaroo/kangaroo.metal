@@ -22,19 +22,70 @@ inline Fe fe_sub(Fe a, Fe b){ Fe r; uint64_t b2=0;
 inline bool fe_ge(Fe a, Fe b){ for(int i=0;i<4;i++){ if(a.v[i]!=b.v[i]) return a.v[i]>b.v[i]; } return true; }
 inline Fe fe_mod(Fe a){ int g=0; while(fe_ge(a,Fe{P0,P1,P2,P3})&&g<8){ a=fe_sub(a,Fe{P0,P1,P2,P3}); g++; } return a; }
 
-inline void mul256(uint64_t a[4], uint64_t b[4], uint64_t w[10]){
-  for(int i=0;i<8;i++) w[i]=0;
-  for(int i=0;i<4;i++){ uint64_t carry=0; uint64_t aw=a[i];
-    for(int j=0;j<4;j++){ uint64_t bw=b[j];
-      uint64_t al=aw&0xffffffffULL, ah=aw>>32, bl=bw&0xffffffffULL, bh=bw>>32;
-      uint64_t ll=al*bl, lh=al*bh, hl=ah*bl, hh=ah*bh;
-      uint64_t mid=(ll>>32)+(lh&0xffffffffULL)+(hl&0xffffffffULL);
-      uint64_t lo=(ll&0xffffffffULL)|(mid<<32);
-      uint64_t hi=(lh>>32)+(hl>>32)+(mid>>32)+hh;
-      int pos=i+j;
-      uint64_t cur=w[pos]+lo; uint64_t c1=(cur<lo)?1:0; w[pos]=cur;
-      uint64_t cur2=w[pos+1]+hi+c1; uint64_t c2=(cur2<hi||(cur2==hi&&c1))?1:0; w[pos+1]=cur2; w[pos+2]+=c2;
-    } }
+inline void mul256(const uint64_t a[4], const uint64_t b[4], thread uint64_t w[10]){
+  for(int i=0;i<10;i++) w[i]=0;
+  for(int i=0;i<4;i++){
+    uint64_t carry = 0;
+    for(int j=0;j<4;j++){
+      uint64_t lo = a[i] * b[j];
+      uint64_t hi = mulhi(a[i], b[j]);
+      uint64_t sum1 = w[i+j] + lo;
+      uint64_t c1 = (sum1 < lo) ? 1 : 0;
+      uint64_t sum2 = sum1 + carry;
+      uint64_t c2 = (sum2 < sum1) ? 1 : 0;
+      w[i+j] = sum2;
+      carry = hi + c1 + c2;
+    }
+    int p = i + 4;
+    while(carry && p < 10) {
+      w[p] += carry;
+      carry = (w[p] < carry) ? 1 : 0;
+      p++;
+    }
+  }
+}
+inline void sqr256(const uint64_t a[4], thread uint64_t w[10]){
+  for(int i=0;i<10;i++) w[i]=0;
+  for(int i=0;i<3;i++){
+    uint64_t carry = 0;
+    for(int j=i+1;j<4;j++){
+      uint64_t lo = a[i] * a[j];
+      uint64_t hi = mulhi(a[i], a[j]);
+      uint64_t sum1 = w[i+j] + lo;
+      uint64_t c1 = (sum1 < lo) ? 1 : 0;
+      uint64_t sum2 = sum1 + carry;
+      uint64_t c2 = (sum2 < sum1) ? 1 : 0;
+      w[i+j] = sum2;
+      carry = hi + c1 + c2;
+    }
+    int p = i + 4;
+    while(carry && p < 10) {
+      w[p] += carry;
+      carry = (w[p] < carry) ? 1 : 0;
+      p++;
+    }
+  }
+  uint64_t carry = 0;
+  for(int i=0;i<8;i++){
+    uint64_t val = w[i];
+    w[i] = (val << 1) | carry;
+    carry = val >> 63;
+  }
+  w[8] = carry;
+  for(int i=0;i<4;i++){
+    uint64_t lo = a[i] * a[i];
+    uint64_t hi = mulhi(a[i], a[i]);
+    uint64_t sum = w[2*i] + lo;
+    uint64_t c = (sum < lo) ? 1 : 0;
+    w[2*i] = sum;
+    carry = hi + c;
+    int p = 2*i + 1;
+    while(carry && p < 10){
+      w[p] += carry;
+      carry = (w[p] < carry) ? 1 : 0;
+      p++;
+    }
+  }
 }
 inline int fe_cmpw(const uint64_t a[8], const uint64_t b[8]){
   for(int i=7;i>=0;i--){ if(a[i]!=b[i]) return a[i]>b[i]?1:-1; } return 0; }
@@ -58,7 +109,26 @@ inline Fe fe_mul(Fe a, Fe b){
   int g=0; uint64_t a8[8]; for(int i=0;i<8;i++) a8[i]=acc[i];
   while(fe_cmpw(a8,P8)>=0 && g<64){ uint64_t b2=0; for(int i=0;i<8;i++){ uint64_t ss=(uint64_t)a8[i]-PLE[i]-b2; a8[i]=(uint32_t)ss; b2=(ss>>63); } }
   Fe r; for(int i=0;i<4;i++){ r.v[i]=((uint64_t)a8[7-2*i]<<32)|a8[6-2*i]; } return r; }
-inline Fe fe_sqr(Fe a){ return fe_mul(a,a); }
+inline Fe fe_sqr(Fe a){
+  uint64_t aw[4]={a.v[3],a.v[2],a.v[1],a.v[0]};
+  uint64_t w[10]; sqr256(aw,w);
+  uint32_t o[16]; for(int i=0;i<8;i++){ uint64_t word=w[i]; o[2*i]=(uint32_t)(word&0xffffffffULL); o[2*i+1]=(uint32_t)(word>>32); }
+  uint64_t acc[16]; for(int i=0;i<16;i++) acc[i]=o[i];
+  for(int r=0;r<12;r++){
+    int any=0;
+    for(int i=8;i<16;i++){
+      if(acc[i]==0) continue; any=1;
+      uint64_t hiw=acc[i]; acc[i]=0;
+      uint64_t add=hiw*977ULL; int j=i-8; while(add){ uint64_t ss=acc[j]+(add&0xffffffffULL); acc[j]=(uint32_t)ss; add=(add>>32)+(ss>>32); if(++j>=16)break; }
+      add=hiw; j=i-7; while(add){ uint64_t ss=acc[j]+(add&0xffffffffULL); acc[j]=(uint32_t)ss; add=(add>>32)+(ss>>32); if(++j>=16)break; }
+    }
+    if(!any) break;
+  }
+  uint32_t PLE[8]={0xFFFFFC2F,0xFFFFFFFE,0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF};
+  uint64_t P8[8]; for(int i=0;i<8;i++) P8[i]=PLE[i];
+  int g=0; uint64_t a8[8]; for(int i=0;i<8;i++) a8[i]=acc[i];
+  while(fe_cmpw(a8,P8)>=0 && g<64){ uint64_t b2=0; for(int i=0;i<8;i++){ uint64_t ss=(uint64_t)a8[i]-PLE[i]-b2; a8[i]=(uint32_t)ss; b2=(ss>>63); } }
+  Fe r; for(int i=0;i<4;i++){ r.v[i]=((uint64_t)a8[7-2*i]<<32)|a8[6-2*i]; } return r; }
 
 inline bool fe_eq(Fe a, Fe b){ for(int i=0;i<4;i++) if(a.v[i]!=b.v[i]) return false; return true; }
 inline Fe fe_modsub(Fe a, Fe b){ Fe r=fe_sub(a,b); if(fe_ge(b,a)&&!fe_eq(a,b)) r=fe_add(r,Fe{P0,P1,P2,P3}); return r; }
