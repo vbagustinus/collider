@@ -325,9 +325,8 @@ while :; do
         # FOUND file is TRACKED in git: runners/sync.sh pushes it to the cloud so
         # every computer sees the found key (the metal log is gitignored).
         printf '%s\n' "$PRIV" >> "$LOG_DIR/FOUND_p${PUZZLE}.txt"
-        # RELAY MATCH INSTAN: push seketika + alert HP (jangan tunggu siklus daemon
-        # 30 menit) — ledger temuan sampai ke cloud & HP dalam hitungan detik.
-        bash "$B1000/runners/sync.sh" push >/dev/null 2>&1 || true
+        # Alert HP DULU (backup kunci), lalu SWEEP prioritas utama, baru relay
+        # git — git push yang menggantung saat offline tidak boleh menunda dana.
         bash "$B1000/tools/notify_match.sh" "KANGAROO MATCH p${PUZZLE}" "priv=${PRIV}" >/dev/null 2>&1
         SWEEP_DONE="$B1000/tools/sweep/sweep_done.log"
         if grep -q "PUZZLE=$PUZZLE " "$SWEEP_DONE" 2>/dev/null; then
@@ -351,6 +350,9 @@ while :; do
           fi
         fi
       fi
+      # RELAY MATCH INSTAN setelah sweep (ledger sampai ke cloud dalam hitungan
+      # detik). Sengaja SETELAH sweep supaya pengiriman dana tidak tertunda.
+      bash "$B1000/runners/sync.sh" push >/dev/null 2>&1 || true
     else
       echo "[sweep] SOLVED but no 'SOLVED k =' line in log; cannot auto-sweep."
     fi

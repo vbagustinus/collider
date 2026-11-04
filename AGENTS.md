@@ -103,8 +103,10 @@ Perintah untuk AI:
   audit manual dan TIDAK pernah di-retry.
   Alamat tujuan = `tools/sweep/SWEEP_ADDRESS` (atau env `SWEEP_ADDRESS`).
 - RELAY MATCH INSTAN (2026-09-21): saat MATCH → `sync.sh push` seketika + alert
-  HP via ntfy.sh. Setup per mesin: install app "ntfy" di HP → subscribe satu
-  topik rahasia yg SAMA antar mesin → `echo topik > tools/notify/NTFY_TOPIC`
+  HP via ntfy.sh. Sejak 2026-11-04 urutannya: tulis FOUND → alert HP → SWEEP
+  dana → push; git push tidak boleh menunda pengiriman (bisa menggantung saat
+  offline). Setup per mesin: install app "ntfy" di HP → subscribe satu topik
+  rahasia yg SAMA antar mesin → `echo topik > tools/notify/NTFY_TOPIC`
   (di-gitignore, salin manual antar mesin). Tanpa file itu semua tetap jalan,
   hanya tanpa alert HP. Saat PULL: FOUND bertambah = mesin lain menang →
   alert lokal + HP otomatis.
