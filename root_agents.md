@@ -322,6 +322,29 @@ di-commit (local) kecuali dinyatakan lain.
   (round TIME=8s nyata 60s). Sekarang keyhunt menulis langsung ke file dan
   dibunuh by-pid; `tail -f` menjaga log utama tetap live. Round 8s = 8s, rc=0.
 
+### 16. MATCH = REKAM SEKETIKA (2026-11-04; auto-sweep dataset TIDAK dipakai)
+- Prinsip user: bukan auto-sweep yang penting, tetapi **MATCH harus langsung
+  tercatat**. Auto-sweep untuk 13,3 juta alamat pihak lain memang TIDAK dibuat;
+  jalur puzzle p71–p160 (`tools/sweep/`) tetap ada dan dipakai hanya bila MATCH
+  puzzle nyata (verifikasi priv→pubkey→hash160 sebelum kirim dana).
+- Urutan rekam di `_write_bin_found` (weakkey): fakta inti (privkey, rmd160,
+  alamat P2PKH+bech32, saldo dataset) ditulis + **`fsync`** LEBIH DULU, baru
+  verifikasi saldo live (jaringan bisa hang/offline tanpa menunda pencatatan).
+- Empat artifact per MATCH: (1) `KEYFOUNDKEYFOUND.txt` root (ledger, ter-track
+  git), (2) `logs/weakkey/matches/MATCH_<waktu>_<priv8>.txt` (laporan detail),
+  (3) `logs/weakkey/matches.jsonl` (baris mesin), (4) `logs/weakkey/.match_seen`
+  (marker: waktu, priv, path laporan).
+- Driver `run_target_bin_sweep.sh`: marker diperiksa SEBELUM memulai tahap dan
+  sesudah tiap tahap → sweep berhenti sendiri, tidak lanjut tahap berikutnya.
+  `start` MENOLAK jalan bila marker ada (temuan wajib ditinjau); override sadar:
+  `RESET_MATCH=1 bash tools/weakkey/run_target_bin_sweep.sh start`.
+  `reset` mengarsipkan marker (`.match_seen.old.<epoch>`), ledger & laporan
+  TIDAK pernah dihapus. `status` menampilkan MATCH + path laporan;
+  `bash tools/weakkey/run_target_bin_sweep.sh match` mencetak laporan terbaru.
+- Uji terverifikasi (sandbox): tanaman `mt19937@1231006505` → MATCH, marker +
+  laporan + jsonl + ledger terisi (fsync), `start` menolak (rc=1), `run` keluar
+  0,3 dtk tanpa memulai tahap, `reset` mengarsipkan marker.
+
 ## Execution Style
 
 - Be direct and action-oriented.
