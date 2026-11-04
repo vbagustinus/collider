@@ -29,7 +29,7 @@
 #     masuk pending — itu kegagalan permanen (anti-zonk).
 #
 # Deps: coincurve, python-bitcoinlib, requests
-import sys, os, glob, time, argparse, hashlib, struct, json
+import sys, os, glob, re, time, argparse, hashlib, struct, json
 from coincurve import PrivateKey
 import requests
 
@@ -40,6 +40,7 @@ DUST = 546
 SWEEP_DEFAULT = "1PqYBqJAsT6AVCAr6ueuTYuRUu61NHet5"  # BTC puzzle-solve sweep addr (AGENTS.md)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(os.path.dirname(_HERE))  # <repo>/tools/sweep -> <repo>
 PENDING_DIR = os.path.join(_HERE, "pending")
 DONE_LOG = os.path.join(_HERE, "sweep_done.log")
 PENDING_RC = 75  # EX_TEMPFAIL: "coba lagi nanti", BUKAN gagal permanen
@@ -362,6 +363,115 @@ def sweep_once(cfg_path: str, priv_hex: str, sweep_addr: str, dry: bool = False)
     return ("sent", txid)
 
 
+# ---- recovery scan: FOUND yang belum pernah sukses dikirim -----------------
+def _done_puzzles():
+    done = set()
+    try:
+        for ln in open(DONE_LOG):
+            m = re.search(r"(?:^|\s)PUZZLE=(\d+)\b", ln)
+            if m:
+                done.add(m.group(1))
+    except OSError:
+        pass
+    return done
+
+
+def _find_config(puzzle: str):
+    pats = [
+        os.path.join(REPO_ROOT, "configs", f"p{puzzle}_kh.conf"),
+        os.path.join(REPO_ROOT, "configs", f"collider_jump_p{puzzle}_rnd.conf"),
+    ] + sorted(glob.glob(os.path.join(REPO_ROOT, "configs", f"*p{puzzle}_*rnd.conf")))
+    for c in pats:
+        if os.path.isfile(c):
+            return c
+    return None
+
+
+def recover_found(dry: bool = False, sweep_addr: str = None) -> int:
+    """Safety net start-all: sweep logs/FOUND_p*.txt yang belum sukses dikirim.
+
+    Menutup celah "mesin mati tepat setelah MATCH (FOUND tertulis) tapi sweep
+    belum jalan". Idempoten: puzzle yang sudah ada di sweep_done.log dilewati.
+    Kalau offline, sisa kunci langsung diantrekan tanpa menunggu timeout per
+    kunci supaya start-all tidak menggantung lama.
+    """
+    sweep_addr = sweep_addr or resolve_sweep_address()
+    files = sorted(glob.glob(os.path.join(REPO_ROOT, "logs", "FOUND_p*.txt")))
+    if not files:
+        print("[recover] tidak ada logs/FOUND_p*.txt")
+        return 0
+    done = _done_puzzles()
+    jobs, perm = [], 0
+    for f in files:
+        m = re.search(r"FOUND_p(\d+)\.txt$", os.path.basename(f))
+        if not m:
+            continue
+        puzzle = m.group(1)
+        if puzzle in done:
+            print(f"[recover] p{puzzle}: sudah ada di sweep_done.log -> skip")
+            continue
+        cfg = _find_config(puzzle)
+        if not cfg:
+            print(f"[recover] p{puzzle}: config tidak ditemukan -> skip (cek manual)")
+            perm += 1
+            continue
+        seen = set()
+        try:
+            fh = open(f)
+        except OSError as e:
+            print(f"[recover] p{puzzle}: tidak bisa baca {f}: {e}")
+            perm += 1
+            continue
+        with fh:
+            for ln in fh:
+                k = ln.strip().lower()
+                if not re.fullmatch(r"[0-9a-f]{1,64}", k) or k in seen:
+                    continue
+                seen.add(k)
+                jobs.append((puzzle, cfg, k))
+    if not jobs:
+        print("[recover] tidak ada kunci FOUND yang perlu di-sweep.")
+        return 1 if perm else 0
+
+    print(f"[recover] {len(jobs)} kunci FOUND belum tercatat swept -> mencoba sweep...")
+    offline = False
+    pending = 0
+    for puzzle, cfg, key in jobs:
+        if offline:
+            # sudah terbukti offline: antrekan sisanya TANPA nunggu timeout lagi
+            if not dry:
+                enqueue_pending(cfg, key, sweep_addr, "recovery: masih offline")
+            pending += 1
+            continue
+        print(f"\n[recover] p{puzzle} key={key[:16]}…")
+        try:
+            status, _ = sweep_once(cfg, key, sweep_addr, dry)
+        except TransientNetError as e:
+            print(f"[recover] OFFLINE: {e}")
+            if not dry:
+                enqueue_pending(cfg, key, sweep_addr, str(e))
+            offline = True
+            pending += 1
+            continue
+        except SweepError as e:
+            print(f"[recover] GAGAL PERMANEN p{puzzle}: {e}")
+            perm += 1
+            continue
+        except Exception as e:
+            print(f"[recover] GAGAL PERMANEN p{puzzle} (unexpected): {e}")
+            perm += 1
+            continue
+        if status == "sent":
+            print(f"[recover] p{puzzle} terkirim.")
+        elif status == "no-utxos":
+            print(f"[recover] p{puzzle} tidak ada UTXO (dana sudah disapu / kosong).")
+        elif status == "dry":
+            print("[recover] DRY-RUN: tidak broadcast & tidak membuat pending.")
+    if pending:
+        return PENDING_RC
+    return 1 if perm else 0
+
+
 def retry_pending(dry: bool = False) -> int:
     """Proses semua job pending. return 0 = tidak ada sisa, 75 = masih pending."""
     if not os.path.isdir(PENDING_DIR):
@@ -440,6 +550,8 @@ def main():
                     help="required to actually broadcast; without this flag, sweep is always dry-run")
     ap.add_argument("--retry-pending", action="store_true",
                     help="proses antrean tools/sweep/pending/ (dipakai sync daemon & start-all)")
+    ap.add_argument("--sweep-found", action="store_true",
+                    help="safety net start-all: sweep logs/FOUND_p*.txt yang belum ada di sweep_done.log")
     ap.add_argument("--testnet", action="store_true", help="use blockstream testnet API + testnet addresses")
     args = ap.parse_args()
 
@@ -448,11 +560,13 @@ def main():
         NET_PREFIX = 0x6F
     dry = args.dry_run or os.environ.get("SWEEP_DRYRUN") == "1" or not args.confirm
 
+    if args.sweep_found:
+        return recover_found(dry, args.sweep)
     if args.retry_pending:
         return retry_pending(dry)
 
     if not args.config or not args.priv:
-        ap.error("--config dan --priv wajib (kecuali memakai --retry-pending)")
+        ap.error("--config dan --priv wajib (kecuali --retry-pending / --sweep-found)")
     try:
         status, _ = sweep_once(args.config, args.priv, args.sweep, dry)
     except TransientNetError as e:

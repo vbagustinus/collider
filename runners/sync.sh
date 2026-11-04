@@ -397,6 +397,31 @@ _col_sweep_pending_retry() {
   return 0
 }
 
+# Safety net start-all: sweep logs/FOUND_p*.txt yang belum pernah sukses dikirim
+# (mis. mesin mati tepat setelah MATCH, sebelum sempat sweep). Kalau offline,
+# sweep.py mengantrekan semua sisa kunci sekaligus (rc=75) — retry langsung
+# dilewati karena pasti gagal juga; siklus sync berikutnya yang mengirim.
+_col_sweep_recover() {
+  local mode="--confirm"
+  [[ -n "${SWEEP_DRYRUN:-}" ]] && mode="--dry-run"
+  if [[ -n "$(find "$COL_ROOT/logs" -maxdepth 1 -name 'FOUND_p*.txt' -print -quit 2>/dev/null)" ]]; then
+    _col_log "sweep recovery: cek FOUND yang belum di-sweep..."
+    python3 "$COL_ROOT/tools/sweep/sweep.py" --sweep-found "$mode" \
+      >> "$COL_ROOT/tools/sweep/recovery.log" 2>&1
+    local rc=$?
+    if [[ "$rc" -eq 75 ]]; then
+      _col_log "sweep recovery: OFFLINE — sisa kunci sudah masuk antrean pending."
+      return 0
+    elif [[ "$rc" -ne 0 ]]; then
+      _col_log "sweep recovery: ada kegagalan permanen — lihat tools/sweep/recovery.log."
+    else
+      _col_log "sweep recovery: selesai (lihat tools/sweep/recovery.log)."
+    fi
+  fi
+  _col_sweep_pending_retry
+  return 0
+}
+
 # ---- push ----------------------------------------------------------------
 sync_push() {
   if ! _col_lock_take 60; then

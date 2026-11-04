@@ -66,6 +66,9 @@ Saat `metal-kangaroo` mencetak `SOLVED k = <priv>`, runner otomatis:
    sync / saat start-all, atau manual `--retry-pending --confirm`. Job baru
    dihapus setelah BROADCAST OK. File `.failed.json` = gagal permanen (MATCH
    invalid/tx ditolak) — arsip audit, TIDAK pernah di-retry.
+5. safety net tiap start-all: `--sweep-found` memindai semua `logs/FOUND_p*.txt`
+   yang belum ada di `sweep_done.log` lalu sweep/pending-kan (log:
+   `tools/sweep/recovery.log`). Ini menutup celah mesin mati tepat setelah MATCH.
 
 Alamat tujuan (kemana kirim):
 - default: `1PqYBqJAsT6AVCAr6ueuTYuRUu61NHet5` (BTC puzzle-solve sweep addr, AGENTS.md).

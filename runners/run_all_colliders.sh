@@ -140,7 +140,7 @@ case "$cmd" in
     sync_pull
 
     # --- MATCH yang tertunda karena offline: kirim sekarang (cek koneksi) ---
-    _col_sweep_pending_retry
+    _col_sweep_recover
 
     # --- trim log runtime biar logs/ nggak numpuk (metal.log ~1,4 MB/hari;
     #     pct_history / MATCH / .pids TIDAK disentuh — lihat tools/trim_logs.sh) ---

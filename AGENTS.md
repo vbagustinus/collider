@@ -102,6 +102,11 @@ Perintah untuk AI:
   Job aktif = `pending/*.job.json`; arsip `.failed.json`/`.bad.json` adalah
   audit manual dan TIDAK pernah di-retry.
   Alamat tujuan = `tools/sweep/SWEEP_ADDRESS` (atau env `SWEEP_ADDRESS`).
+- RECOVERY SWEEP (2026-11-04): tiap `start-all` (dan `start <pz>`) runner juga
+  memanggil `sweep.py --sweep-found`: semua `logs/FOUND_p*.txt` yang puzzle-nya
+  belum ada di `sweep_done.log` langsung dicoba di-sweep. Menutup celah "mesin
+  mati tepat setelah MATCH". Kalau offline, seluruh sisa kunci dimasukkan ke
+  antrean pending sekaligus (tanpa timeout per kunci). Log: `tools/sweep/recovery.log`.
 - RELAY MATCH INSTAN (2026-09-21): saat MATCH → `sync.sh push` seketika + alert
   HP via ntfy.sh. Sejak 2026-11-04 urutannya: tulis FOUND → alert HP → SWEEP
   dana → push; git push tidak boleh menunda pengiriman (bisa menggantung saat

@@ -13,6 +13,7 @@ tools/sweep/*.sweep.log
 # antrean MATCH saat offline: berisi PRIVATE KEY (0600) — JANGAN pernah di-commit
 tools/sweep/pending/
 tools/sweep/pending_retry.log
+tools/sweep/recovery.log
 
 # --- build artifacts ---
 *.o
