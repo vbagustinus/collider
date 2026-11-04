@@ -294,6 +294,34 @@ di-commit (local) kecuali dinyatakan lain.
 - File log mentah `*.kh.log`/`*.metal.log` di-gitignore — yang terpush cuma
   progress, MATCH/FOUND, kode, config.
 
+### 15. KEBIJAKAN "TIDAK MENYIMPAN PRIVATE KEY ACAK DI LOG" (2026-11-04)
+- MASALAH: keyhunt tanpa `-q` mencetak `Base key: <privkey 256-bit>` tiap thread
+  ke stdout (itulah kunci acak yang dipakai wallet). Audit menemukan **71.205
+  segmen** bocor di `keyhunt/logs` + `collider/logs`; semuanya dibersihkan
+  (0 sisa, terverifikasi ulang). File itu memang gitignored → tidak pernah masuk
+  git history, jadi tidak ada yang perlu di-rewrite.
+- PENCEGAHAN (utama): `keyhunt/runners/run_keyhunt_jump.sh` sekarang memanggil
+  keyhunt dengan **`-q`** (statistik "Total ... keys/s" TETAP tercetak; hanya
+  `Base key` yang hilang).
+- KONSEKUENSI PENTING: `-q` juga membungkam baris `Hit! Private Key:` di stdout.
+  Karena itu deteksi MATCH dipindah ke **`KEYFOUNDKEYFOUND.txt`** (keyhunt
+  menulis langsung ke file, `fflush`), dibandingkan ukuran ledger sebelum/sesudah
+  round; grep log dipertahankan hanya sebagai fallback.
+- Jaring pengaman: `keyhunt/tools/filter_keys.py` (self-contained, ikut ter-push)
+  dipanggil tiap akhir round untuk `--apply` pada round log + log utama.
+  Padanannya di project root: `tools/scrub_log_keys.py` (audit seluruh log).
+- ATURAN PARSING: log keyhunt memakai CR (`\r`), jadi pembersihan WAJIB per
+  SEGMEN (`\r\n|\r|\n`), bukan per baris `\n`. Jangan longgarkan pola: 40 hex =
+  hash160/rmd160 TARGET (bukan kunci); 64 hex = kunci.
+- FILE YANG TIDAK BOLEH DISENTUH: `*.rmd`, `*.bin`, `*.kh_start_history`,
+  `*.pct_history`, `*.js`, `*.json`, `*.tsv`, `*.conf`, dan semua nama berisi
+  `match`/`found` + `KEYFOUNDKEYFOUND.txt` (arsip temuan). Tool sudah menolak
+  ekstensi/nama itu — jangan dihapus pagarnya.
+- FIX BONUS (bug lama, 2026-11-04): `kill` pada pipeline `keyhunt | tee | tee`
+  hanya membunuh `tee` terakhir → keyhunt terus jalan sampai tulis berikutnya
+  (round TIME=8s nyata 60s). Sekarang keyhunt menulis langsung ke file dan
+  dibunuh by-pid; `tail -f` menjaga log utama tetap live. Round 8s = 8s, rc=0.
+
 ## Execution Style
 
 - Be direct and action-oriented.
