@@ -99,6 +99,8 @@ Perintah untuk AI:
   `python3 tools/sweep/sweep.py --retry-pending --confirm`. Job hanya hilang
   setelah BROADCAST OK (atau alamat sudah kosong = tidak ada dana). MATCH
   invalid tetap GAGAL PERMANEN (tidak pernah masuk pending) — anti-zonk.
+  Job aktif = `pending/*.job.json`; arsip `.failed.json`/`.bad.json` adalah
+  audit manual dan TIDAK pernah di-retry.
   Alamat tujuan = `tools/sweep/SWEEP_ADDRESS` (atau env `SWEEP_ADDRESS`).
 - RELAY MATCH INSTAN (2026-09-21): saat MATCH → `sync.sh push` seketika + alert
   HP via ntfy.sh. Setup per mesin: install app "ntfy" di HP → subscribe satu

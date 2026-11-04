@@ -60,6 +60,12 @@ Saat `metal-kangaroo` mencetak `SOLVED k = <priv>`, runner otomatis:
    - bangun + tanda-tangani tx P2PKH mengirim saldo penuh (minus fee) ke alamat tujuan,
    - broadcast.
 3. catat `tools/sweep/sweep_done.log` (tanpa priv key) agar tidak dobel sweep.
+   `sweep_done.log` HANYA ditulis setelah broadcast sukses (dry-run tidak dihitung).
+4. kalau koneksi mati: `sweep.py` keluar dengan rc=75 dan menyimpan job di
+   `tools/sweep/pending/*.job.json` (mode 0600). Retry otomatis tiap siklus
+   sync / saat start-all, atau manual `--retry-pending --confirm`. Job baru
+   dihapus setelah BROADCAST OK. File `.failed.json` = gagal permanen (MATCH
+   invalid/tx ditolak) — arsip audit, TIDAK pernah di-retry.
 
 Alamat tujuan (kemana kirim):
 - default: `1PqYBqJAsT6AVCAr6ueuTYuRUu61NHet5` (BTC puzzle-solve sweep addr, AGENTS.md).

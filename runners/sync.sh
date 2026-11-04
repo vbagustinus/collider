@@ -383,7 +383,7 @@ sync_pull() {
 _col_sweep_pending_retry() {
   local pdir="$COL_ROOT/tools/sweep/pending" n
   [[ -d "$pdir" ]] || return 0
-  n=$(find "$pdir" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
+  n=$(find "$pdir" -maxdepth 1 -name '*.job.json' 2>/dev/null | wc -l | tr -d ' ')
   [[ "${n:-0}" -gt 0 ]] 2>/dev/null || return 0
   local mode="--confirm"
   [[ -n "${SWEEP_DRYRUN:-}" ]] && mode="--dry-run"

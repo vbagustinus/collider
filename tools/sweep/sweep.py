@@ -58,11 +58,14 @@ def resolve_sweep_address():
     if os.environ.get("SWEEP_ADDRESS"):
         return os.environ["SWEEP_ADDRESS"].strip()
     f = os.path.join(_HERE, "SWEEP_ADDRESS")
-    if os.path.exists(f):
-        for ln in open(f):
-            ln = ln.strip()
-            if ln and not ln.startswith("#"):
-                return ln
+    try:
+        if os.path.exists(f):
+            for ln in open(f):
+                ln = ln.strip()
+                if ln and not ln.startswith("#"):
+                    return ln
+    except OSError:
+        pass
     return SWEEP_DEFAULT
 
 
@@ -131,14 +134,19 @@ def parse_config(conf: str):
 def get_utxos(addr: str):
     try:
         r = requests.get(f"{ESP}/address/{addr}/utxos", timeout=30)
-    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+    except requests.exceptions.RequestException as e:
+        # Koneksi putus / timeout / DNS / proxy / redirect: SEMUA transient —
+        # job wajib masuk pending, jangan sampai kunci hilang.
         raise TransientNetError(f"cannot reach UTXO API: {e}")
     if r.status_code == 404:
         return []  # address with no transaction history
-    if r.status_code >= 500:
-        raise TransientNetError(f"UTXO API HTTP {r.status_code}")
-    r.raise_for_status()
-    return r.json()
+    if r.status_code >= 400:
+        # 429 rate-limit, 5xx, dll: transien. Retry nanti.
+        raise TransientNetError(f"UTXO API HTTP {r.status_code}: {r.text[:160]}")
+    try:
+        return r.json()
+    except ValueError as e:
+        raise TransientNetError(f"UTXO API response bukan JSON valid: {e}")
 
 
 def get_fee_satvb() -> int:
@@ -222,7 +230,10 @@ def _pending_path(cfg_path: str, priv_hex: str) -> str:
     except Exception:
         puzzle = "?"
     tag = hashlib.sha256(priv_hex.lower().encode()).hexdigest()[:16]
-    return os.path.join(PENDING_DIR, f"p{puzzle}_{tag}.json")
+    # Suffix .job.json = job AKTIF. File .failed.json / .bad.json adalah arsip
+    # audit dan TIDAK boleh ikut di-retry (dulu bug: glob *.json ikut memungut
+    # arsip -> retry berulang, akhiran menumpuk .failed.failed.json).
+    return os.path.join(PENDING_DIR, f"p{puzzle}_{tag}.job.json")
 
 
 def _write_json_0600(path: str, obj: dict):
@@ -293,16 +304,16 @@ def sweep_once(cfg_path: str, priv_hex: str, sweep_addr: str, dry: bool = False)
     pub_hex = cfg.get("PUBKEY", "")
     tgt = cfg.get("TARGET_HASH160", "")
     puzzle = cfg.get("PUZZLE", "?")
-    pk = PrivateKey.from_int(priv_int)
-    derived_pub = pk.public_key.format(compressed=True)
-
-    # Keyhunt-style configs carry only TARGET_HASH160 (no PUBKEY): derive the
-    # pubkey from the private key and verify it against the target hash160.
-    if not pub_hex:
-        pub_hex = derived_pub.hex()
-        addr = h160_to_addr(hash160(derived_pub))
-    else:
-        addr = addr_from_pub(pub_hex)
+    try:
+        pk = PrivateKey.from_int(priv_int)
+        derived_pub = pk.public_key.format(compressed=True)
+        if not pub_hex:
+            pub_hex = derived_pub.hex()
+            addr = h160_to_addr(hash160(derived_pub))
+        else:
+            addr = addr_from_pub(pub_hex)
+    except ValueError as e:
+        raise SweepError(f"config/priv tidak valid: {e}")
     print(f"[sweep] puzzle address = {addr}")
 
     # GUARANTEE THE MATCH IS VALID before moving any funds:
@@ -336,9 +347,10 @@ def sweep_once(cfg_path: str, priv_hex: str, sweep_addr: str, dry: bool = False)
     try:
         r = requests.post(f"{ESP}/tx", data=rawhex, timeout=30,
                           headers={"Content-Type": "text/plain"})
-    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+    except requests.exceptions.RequestException as e:
         raise TransientNetError(f"broadcast failed (offline): {e}")
-    if r.status_code >= 500:
+    if r.status_code >= 500 or r.status_code == 429:
+        # server sibuk / rate limit: transien, aman diulang nanti.
         raise TransientNetError(f"broadcast API HTTP {r.status_code}: {r.text[:160]}")
     if r.status_code >= 400:
         # 4xx = tx ditolak (bukan masalah koneksi). Jangan diulang selamanya.
@@ -354,23 +366,34 @@ def retry_pending(dry: bool = False) -> int:
     """Proses semua job pending. return 0 = tidak ada sisa, 75 = masih pending."""
     if not os.path.isdir(PENDING_DIR):
         return 0
-    jobs = sorted(glob.glob(os.path.join(PENDING_DIR, "*.json")))
+    # HANYA job aktif (.job.json). Arsip .failed.json/.bad.json tidak pernah
+    # di-retry — kalau ikut, kegagalan permanen akan berulang tiap siklus.
+    jobs = sorted(glob.glob(os.path.join(PENDING_DIR, "*.job.json")))
     if not jobs:
         return 0
     remaining = 0
+
+    def archive(path, kind):
+        base = path[:-len(".job.json")] if path.endswith(".job.json") else os.path.splitext(path)[0]
+        dst = base + kind
+        if os.path.exists(dst):
+            # jangan timpa arsip audit lama (match/puzzle yang sama gagal lagi)
+            dst = base + "." + time.strftime("%Y%m%dT%H%M%S") + kind
+        os.replace(path, dst)
+
     for path in jobs:
         try:
             job = json.load(open(path))
         except Exception as e:
-            print(f"[pending] {os.path.basename(path)}: file rusak ({e}) -> .bad")
-            os.replace(path, path[:-5] + ".bad")
+            print(f"[pending] {os.path.basename(path)}: file rusak ({e}) -> .bad.json")
+            archive(path, ".bad.json")
             continue
         cfg = job.get("config", "")
         priv = job.get("priv", "")
         sweep_addr = job.get("sweep", "") or resolve_sweep_address()
         if not cfg or not priv:
-            print(f"[pending] {os.path.basename(path)}: data tidak lengkap -> .bad")
-            os.replace(path, path[:-5] + ".bad")
+            print(f"[pending] {os.path.basename(path)}: data tidak lengkap -> .bad.json")
+            archive(path, ".bad.json")
             continue
         print(f"\n[pending] retry {os.path.basename(path)} (attempt {int(job.get('attempts', 0)) + 1})")
         try:
@@ -387,14 +410,14 @@ def retry_pending(dry: bool = False) -> int:
             job["failed_reason"] = str(e)
             job["last_try"] = time.strftime("%Y-%m-%dT%H:%M:%S")
             _write_json_0600(path, job)
-            os.replace(path, path[:-5] + ".failed.json")
+            archive(path, ".failed.json")
             print(f"[pending] GAGAL PERMANEN: {e} — job dipindah ke .failed.json untuk audit manual.")
             continue
         except Exception as e:  # jangan biarkan 1 job rusak menghentikan antrean
             job["failed_reason"] = f"{type(e).__name__}: {e}"
             job["last_try"] = time.strftime("%Y-%m-%dT%H:%M:%S")
             _write_json_0600(path, job)
-            os.replace(path, path[:-5] + ".failed.json")
+            archive(path, ".failed.json")
             print(f"[pending] GAGAL PERMANEN (unexpected): {e} — job dipindah ke .failed.json.")
             continue
         if status == "dry":
