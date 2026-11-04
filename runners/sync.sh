@@ -375,12 +375,35 @@ sync_pull() {
   return 0
 }
 
+# ---- pending sweep retry (MATCH saat offline) -------------------------------
+# sweep.py menaruh job di tools/sweep/pending/*.json kalau UTXO API / broadcast
+# tidak tercapai (rc=75). Tiap siklus sync kita coba kirim ulang; job hanya
+# hilang setelah BROADCAST OK (atau alamat target memang sudah kosong).
+# Dipanggil DI DALAM lock sync_push supaya dua proses tidak broadcast dobel.
+_col_sweep_pending_retry() {
+  local pdir="$COL_ROOT/tools/sweep/pending" n
+  [[ -d "$pdir" ]] || return 0
+  n=$(find "$pdir" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
+  [[ "${n:-0}" -gt 0 ]] 2>/dev/null || return 0
+  local mode="--confirm"
+  [[ -n "${SWEEP_DRYRUN:-}" ]] && mode="--dry-run"
+  _col_log "sweep pending: $n job — mencoba kirim ulang..."
+  if python3 "$COL_ROOT/tools/sweep/sweep.py" --retry-pending "$mode" \
+       >> "$COL_ROOT/tools/sweep/pending_retry.log" 2>&1; then
+    _col_log "sweep pending: antrean selesai (kosong)."
+  else
+    _col_log "sweep pending: masih tertunda — dicoba lagi siklus berikutnya (tools/sweep/pending_retry.log)."
+  fi
+  return 0
+}
+
 # ---- push ----------------------------------------------------------------
 sync_push() {
   if ! _col_lock_take 60; then
     _col_log "another push in progress; skipping (retried on next cycle)."
     return 0
   fi
+  _col_sweep_pending_retry
   _col_root_agents_refresh
   _col_mirror_findings_ledger
   sync_normalize

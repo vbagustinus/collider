@@ -340,9 +340,14 @@ while :; do
                $( [[ -z "${SWEEP_DRYRUN:-}" ]] && echo --confirm ) \
                $( [[ -n "${SWEEP_DRYRUN:-}" ]] && echo --dry-run ) >> "$SWEEP_OUT" 2>&1; then
             echo "[sweep] done (see $SWEEP_OUT)"
-            echo "PUZZLE=$PUZZLE ADDR=$name" >> "$SWEEP_DONE"
           else
-            echo "[sweep] FAILED (see $SWEEP_OUT) -- priv kept in log for manual sweep"
+            sweep_rc=$?
+            if [[ "$sweep_rc" -eq 75 ]]; then
+              echo "[sweep] PENDING (tidak ada koneksi) — job disimpan di tools/sweep/pending/;"
+              echo "[sweep]          akan dikirim OTOMATIS begitu online (sync daemon/start-all)."
+            else
+              echo "[sweep] FAILED rc=$sweep_rc (see $SWEEP_OUT) -- priv kept in log for manual sweep"
+            fi
           fi
         fi
       fi

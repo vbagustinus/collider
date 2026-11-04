@@ -92,6 +92,14 @@ Perintah untuk AI:
   (rc=0 saat timeout normal TIDAK dianggap match). `tools/sweep/sweep.py`
   verifikasi priv→pubkey→hash160 SEBELUM kirim dana (offline-safe) — MATCH
   palsu mustahil lolos sweep. FOUND file = hasil kerja semua mesin, ter-push via git.
+- PENDING SWEEP (2026-11-04): kalau MATCH terjadi saat OFFLINE, sweep.py TIDAK
+  menyerah — job (config+priv+alamat) disimpan di `tools/sweep/pending/`
+  (mode 0600, gitignored) dan exit 75. Retry OTOMATIS: tiap siklus
+  `sync_push` (daemon), saat `start-all`, dan manual
+  `python3 tools/sweep/sweep.py --retry-pending --confirm`. Job hanya hilang
+  setelah BROADCAST OK (atau alamat sudah kosong = tidak ada dana). MATCH
+  invalid tetap GAGAL PERMANEN (tidak pernah masuk pending) — anti-zonk.
+  Alamat tujuan = `tools/sweep/SWEEP_ADDRESS` (atau env `SWEEP_ADDRESS`).
 - RELAY MATCH INSTAN (2026-09-21): saat MATCH → `sync.sh push` seketika + alert
   HP via ntfy.sh. Setup per mesin: install app "ntfy" di HP → subscribe satu
   topik rahasia yg SAMA antar mesin → `echo topik > tools/notify/NTFY_TOPIC`

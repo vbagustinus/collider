@@ -139,6 +139,9 @@ case "$cmd" in
     echo "=== [sync] ambil perubahan terbaru — seluruh folder (kode/config/data/progress) ==="
     sync_pull
 
+    # --- MATCH yang tertunda karena offline: kirim sekarang (cek koneksi) ---
+    _col_sweep_pending_retry
+
     # --- trim log runtime biar logs/ nggak numpuk (metal.log ~1,4 MB/hari;
     #     pct_history / MATCH / .pids TIDAK disentuh — lihat tools/trim_logs.sh) ---
     bash "$B1000/tools/trim_logs.sh" || echo "WARN: trim_logs gagal (lanjut)"
