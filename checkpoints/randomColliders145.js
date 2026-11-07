@@ -900,6 +900,7 @@ let randomColliders145 = [
   {presentage: "32.15445560", hex: "0x1889782f2a7ec876c09575b75606e18a62deb"},
   {presentage: "32.16302697", hex: "0x1889b5f9936ab096eeebf1db4314fa2377476"},
   {presentage: "32.20000000", hex: "0x188ac083126e978d4fdf3b645a1cac083126e"},
+  {presentage: "32.23000000", hex: "0x188b98c7e28240b780346dc5d63886594af4e"},
   {presentage: "32.30000000", hex: "0x188d916872b020c49ba5e353f7ced916872af"},
   {presentage: "32.40386752", hex: "0x18907e2f4edad6104794ccd2c25f5487126ec"},
   {presentage: "32.40977340", hex: "0x1890a8c2929d62373deb0354da5e161c0758c"},
@@ -2688,5 +2689,4 @@ let randomColliders145 = [
   {presentage: "99.88407478", hex: "0x1ffcbc4cbad85374b968d67e078a107944c66"},
   {presentage: "99.89708633", hex: "0x1ffd1a1976d5919adc34aac9c61bd37c30ab7"},
   {presentage: "99.90000000", hex: "0x1ffd2f1a9fbe76c8b4395810624dd2f1a9fbd"},
-  {presentage: "32.23000000", hex: "0x188b98c7e28240b780346dc5d63886594af4e"},
 ]
