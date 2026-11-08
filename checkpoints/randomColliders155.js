@@ -99,6 +99,7 @@ let randomColliders155 = [
   {presentage: "3.74043677", hex: "0x6abf82a71ffb2e4548f09aee6990ce80116e789"},
   {presentage: "3.76054034", hex: "0x6ac08a27831e247aab0e587fc04c02596dfcd51"},
   {presentage: "3.82544801", hex: "0x6ac3dce983198311757be0a9ac13f838131f751"},
+  {presentage: "3.83000000", hex: "0x6ac4189374bc6a7ef9db22d0e5604189374bc6a"},
   {presentage: "3.89534543", hex: "0x6ac7711255b1d20e6ef26adad918cf4896e1723"},
   {presentage: "3.93478210", hex: "0x6ac975f9d746f938bb8856d11d138c23e5377cc"},
   {presentage: "3.96515114", hex: "0x6acb04076dffda37bbd0729616fa8fcb061a98a"},
