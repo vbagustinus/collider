@@ -124,6 +124,17 @@ static Jac decompress_pub(const char* hex){ B256 x;
     y = b_sub(PRIME, y);
   }
   Jac r; r.X=x;r.Y=y;r.Z=b_setu(1); return r; }
+static B256 hex_to_b256(const char* h){ B256 r; memset(&r,0,sizeof r);
+  if(h[0]=='0'&&(h[1]=='x'||h[1]=='X')) h+=2;
+  size_t n=strlen(h); if(n>64){ h+=n-64; n=64; }
+  for(size_t i=0;i<n;i++){ char c=h[n-1-i]; int v;
+    if(c>='0'&&c<='9') v=c-'0';
+    else if(c>='a'&&c<='f') v=c-'a'+10;
+    else if(c>='A'&&c<='F') v=c-'A'+10;
+    else continue;
+    r.w[i/8] |= (uint32_t)v << ((i%8)*4); }
+  return r; }
+static int B256_bitlen(B256 v){ for(int i=7;i>=0;i--) if(v.w[i]){ uint32_t b=v.w[i]; int sh=0; while(b>>=1) sh++; return i*32+sh+1; } return 0; }
 static uint64_t B256_to_FE(B256 b, int i){ return ((uint64_t)b.w[7-2*i]<<32) | b.w[6-2*i]; }
 static void FE_to_B256(B256* b, const uint64_t f[4]){ for(int i=0;i<4;i++){ (*b).w[7-2*i]=(uint32_t)(f[i]>>32); (*b).w[6-2*i]=(uint32_t)f[i]; } }
 static void le64s_to_B256(B256* b, const uint64_t d[4]){ for(int i=0;i<4;i++){ (*b).w[2*i]=(uint32_t)d[i]; (*b).w[2*i+1]=(uint32_t)(d[i]>>32); } }
@@ -267,6 +278,7 @@ int main(int argc, char** argv){
   NSString* txt=[NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil];
   if(!txt){ printf("cannot read %s\n", argv[1]); return 1; }
   __block int dpBits=24; __block int Range=0; __block NSString* pubkey=nil;
+  __block NSString* startHex=nil; __block NSString* endHex=nil;
   double jumpPct=0.1; double startPct=0.0; int useSub=0;
   __block double bJumpPct=jumpPct; __block double bStartPct=startPct; __block int bUseSub=useSub;
   [txt enumerateLinesUsingBlock:^(NSString* line, BOOL* stop){
@@ -275,6 +287,8 @@ int main(int argc, char** argv){
     else if([line hasPrefix:@"PUBKEY="]){ pubkey=[line substringFromIndex:7]; }
     else if([line hasPrefix:@"JUMP_PCT="]){ bJumpPct=[[line substringFromIndex:9] doubleValue]; }
     else if([line hasPrefix:@"START_PCT="]){ bStartPct=[[line substringFromIndex:10] doubleValue]; bUseSub=1; }
+    else if([line hasPrefix:@"START="]){ startHex=[[line substringFromIndex:6] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]]; }
+    else if([line hasPrefix:@"END="]){ endHex=[[line substringFromIndex:4] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]]; }
   }];
   jumpPct=bJumpPct; startPct=bStartPct; useSub=bUseSub;
   int selftest=0, timeLimit=0; int kangs=65536; int traceTid=-1;
@@ -289,6 +303,21 @@ int main(int argc, char** argv){
   if(selftest){ /* use Range/dpBits/kangs from config for isolation testing */ }
   if(Range<=0) Range=32;
   if(Range<10){ printf("range too small\n"); return 1; }
+
+  // ---- rentang kustom [START,END) dari config (hex) ----
+  // Kalau START & END diisi, range TIDAK lagi dipaksa ke [2^(n-1), 2^n):
+  // lebar jendela = END-START dan A = START. Ini yang membuat sweep mulai dari
+  // 0 mungkin (p71..p1 butuh 3.4x lebih banyak operasi daripada satu [1,2^71)).
+  int useCustom=0; B256 custLo=b_setu(0), custHi=b_setu(0);
+  if(startHex && endHex && !selftest){
+    custLo=hex_to_b256([startHex UTF8String]); custHi=hex_to_b256([endHex UTF8String]);
+    if(b_cmp(custHi,custLo)<=0){ printf("START/END invalid: END <= START\n"); return 1; }
+    // lebar jendela = END-START; ukuran RUANG nilai = lebar-1 (mis. lebar 2^71 -> 71 bit)
+    int bl=B256_bitlen(b_sub(b_sub(custHi,custLo),b_setu(1)));
+    if(bl<10){ printf("range too small (%d bits)\n",bl); return 1; }
+    Range=bl; useCustom=1;
+    printf("custom range: START=%s END=%s -> width %d bits\n",[startHex UTF8String],[endHex UTF8String],Range);
+  }
 
   B256 trueK=b_setu(0);
   Jac Q;
@@ -322,7 +351,9 @@ int main(int argc, char** argv){
   B256 x32o=b_setu(1); for(int i=0;i<Range-5;i++) x32o=b_add(x32o,x32o);
   B256 rangeHalf=b_setu(1); for(int i=0;i<Range-1;i++) rangeHalf=b_add(rangeHalf,rangeHalf);
   B256 windowW, startOff=b_setu(0);
-  if(useSub){
+  if(useCustom){
+    windowW=b_sub(custHi,custLo);
+  } else if(useSub){
     uint64_t spN=(uint64_t)(startPct*1e8), jpN=(uint64_t)(jumpPct*1e8); uint64_t DEN=10000000000ULL;
     uint32_t _po[16]; b_mul(_po, rangeHalf, b_setu(spN));
     B256 _pB; for(int i=0;i<8;i++) _pB.w[i]=_po[i];
@@ -342,7 +373,7 @@ int main(int argc, char** argv){
   // (lama: g_x32 = x32o+startOff -> celah >= 2^(Range-1): mode -p tak pernah tembus)
   // Catatan: g_x32 disimpan POSITIF (=A) karena check_k menghitung k = c + A.
   // Jangan diganti -A mod n: b_sub wrap 2^256 dan b_modn hanya kurangi n sekali.
-  g_x32=b_add(rangeHalf,startOff);
+  g_x32 = useCustom ? custLo : b_add(rangeHalf,startOff);
   B256 tameTop=(b_cmp(x32o,windowW)<0)?x32o:windowW;
   tameTop=b_sub(tameTop,b_setu(1));
   // Qdash = Q - A*G = (k-A)*G. Dihitung via negasi titik, BUKAN skalar besar:
