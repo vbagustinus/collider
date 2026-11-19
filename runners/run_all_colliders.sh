@@ -116,9 +116,36 @@ if [[ "${1:-}" == "--loop" ]]; then
   done
 fi
 
+
+# Doa pembuka: wajib dicetak di awal setiap `start-all` (permintaan owner).
+# Teks doa + niat meminta rezeki 100 BTC; ini doa, bukan jaminan hasil.
+sweep_doa() {
+  cat <<'DOA_EOF'
+================================================================
+        DOA PEMBUKA — SEBELUM SWEEP DIMULAI
+================================================================
+اللَّهُمَّ إِنِّي أَسْأَلُكَ بِأَنَّكَ أَنْتَ اللَّهُ الْأَحَدُ الصَّمَدُ،
+الَّذِي لَمْ يَلِدْ وَلَمْ يُولَدْ وَلَمْ يَكُن لَّهُ كُفُوًا أَحَدٌ،
+أَنْ تَرْزُقَنِي رِزْقًا حَلَالًا طَيِّبًا مُبَارَكًا فِيهِ،
+وَأَنْ تُيَسِّرَ لِي مِائَةَ بِتْكُوِين مِنْ حَيْثُ لَا أَحْتَسِبُ.
+
+"Allahumma inni as'aluka bi-annaka antallahu al-Ahadus-Samad,
+alladhi lam yalid wa lam yulad wa lam yakun lahu kufuwan ahad,
+an tarzuqani rizqan halalan tayyiban mubarakan fih,
+wa an tuyassira li mi'ata bitcoin min haythu la ahtasib."
+
+Ya Allah, aku memohon kepada-Mu dengan nama-nama-Mu yang indah:
+berikanlah rezeki yang halal, baik, dan penuh berkah;
+mudahkanlah bagiku 100 Bitcoin dari arah yang tidak kuduga.
+Aamiin ya Rabbal 'alamin.
+================================================================
+DOA_EOF
+}
+
 case "$cmd" in
 
   start-all)
+    sweep_doa
     ROUND="${2-}"        # kosong = ikut TIME di config tiap collider_jump_*.conf
     KANGS="${3:-}"
     ROUND_DESC="${ROUND:+${ROUND}s}"; ROUND_DESC="${ROUND_DESC:-config TIME}"

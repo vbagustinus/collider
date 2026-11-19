@@ -58,8 +58,25 @@ di-commit (local) kecuali dinyatakan lain.
   peluang ~0% — tool ini cuma untuk key SENGAJA lemah / RNG broken / brainwallet.
   Mode ecdsa-reuse butuh `--sigs <file>` (r,s,z per baris / DER).
   Untuk BTC puzzle addresses (p71-p160), pakai `--compress` karena target pakai compressed pubkey.
-- CATATAN GPU: `secp256k1.metal` + `weakkey_gpu_host.m` RUSAK (return 0,0) dan BELUM dipakai;
-  klaim "Metal GPU acceleration" di docstring lama adalah placeholder. Fase 4 belum dikerjakan.
+- STATUS GPU (2026-11-19, diperbaiki): `secp256k1.metal` + `weakkey_gpu_host.m` sekarang benar.
+  Field aritmetika mod p, doubling (8Y^4), mixed-add window-4, compare Jacobian (tanpa invmod).
+  Host mode: search/dump/list/range/dumpkeys. `weakkey_gpu.py` memakai GPU (list + range 256-bit)
+  dengan early-stop dan verifikasi CPU. Throughput terukur: ~458k cand/s (kunci kecil, skip leading nibble)
+  / ~155k cand/s (rentang 256-bit penuh) pada M2. Build host: `bash tools/weakkey/build.sh`.
+  Uji kebenaran: `tools/weakkey/test_gpu_random.py` (210 nilai acak 256-bit + batas, 210/210 cocok).
+- `weakkey_attack.py --gpu` (2026-11-19): jalur GPU untuk target PUBKEY TUNGGAL; kandidat
+  di-stream ke host mode `list` dan dibandingkan sebagai titik (X,Y), bukan hash160.
+  Berlaku untuk mode yang memakai `run_parallel` (mixed/smart, weak-rng, pattern, vanity-bug,
+  entropy-fail, brainwallet/dictionary). `--batch`, `--target-bin`, `--target-db` TETAP CPU
+  (butuh hash160-set matching). Host mati/gagal → otomatis fallback CPU. Verifikasi MATCH
+  selalu di CPU (`S.pubkey_from_priv` == target) sebelum dilaporkan.
+- BENCHMARK ADIL (2026-11-19, 5 juta kandidat 256-bit, stream identik seed sama,
+  target di luar stream): CPU 8 worker = 120.918 cand/s (41,35s); GPU (--gpu) =
+  80.334 cand/s (62,24s) -> 0,66x, GPU LEBIH LAMBAT. Penyebab: bottleneck streaming
+  hex lewat pipe Python (~80k baris/s), bukan kernel (host-only ~155k cand/s).
+  Reproduksi: `python3 tools/weakkey/bench_gpu_vs_cpu.py --n 5000000`.
+  Artinya: untuk target tunggal, CPU 8 worker tetap pilihan default; GPU berguna
+  saat CPU sedang dipakai collider/keyhunt.
 
 ### 2. puzzles/b1000/runners/run_all_colliders.sh — master sweep collider kangaroo (Metal) [PRIMARY]
 - Self-contained: start-all menjalankan script itu sendiri dalam mode `--loop`, jadi PID di
@@ -70,6 +87,8 @@ di-commit (local) kecuali dinyatakan lain.
   GitHub). b1000 TIDAK menyimpan pct_history/checkpoints sendiri lagi — runner menulis langsung
   ke `collider/logs/` + `collider/checkpoints/`. `b1000/logs` hanya menyimpan log keyhunt + scheduler.
 - `start-all` otomatis sync dulu: pull collider remote + merge (fold leftover) sebelum launch.
+- `start-all` DIAWALI doa pembuka (`sweep_doa`, permintaan owner: minta rezeki 100 BTC) —
+  teks doa jangan dihapus/diubah tanpa instruksi user.
 - `stop-all` otomatis sync + PUSH ke GitHub setelah semua proses berhenti, supaya komputer lain
   (yg juga jalanin collider dari repo yang sama) dapat progress terbaru. Jangan ulangi sync manual
   setelah stop-all — sudah otomatis.
@@ -187,6 +206,7 @@ di-commit (local) kecuali dinyatakan lain.
   tanpa hipotesis baru. Opsi lanjut: transformasi ownerentropy/serial→passphrase.
 
 ### 9. keyhunt/runners/run_all_keyhunt.sh — master control keyhunt random-start
+- `start-all` DIAWALI doa pembuka (`sweep_doa`, permintaan owner: minta rezeki 100 BTC).
 - SINCE 2026-09-20: `stop-all` = sync DUA ARAH — commit → `pull --rebase --autostash` → push dengan retry 3x. Nggak akan lagi kena `! [rejected] main -> main (fetch first)`.
 - Driver merge union: `keyhunt/tools/merge_progress_union.py` + `keyhunt/.gitattributes` (utk `checkpoints/randomKeyhunt*.js` + `logs/*.kh_start_history`). Union + dedup by start/hex → dua mesin bisa push progress puzzle yang sama tanpa konflik. Driver di-register otomatis via `git config merge.progressUnion.driver` di start-all/stop-all.
 - PENTING (hasil debug 2026-09-20): commit "sync: ..." yang isinya 100% sudah upstream bakal di-DROP git saat rebase — resolusi konflik ikut dibuang. Kalau harus rebase saat ada commit sync backlog, pakai cherry-pick + resolve union (verifikasi isi sebelum `rebase --continue`), bukan rebase biasa.
