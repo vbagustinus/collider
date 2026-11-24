@@ -49,11 +49,42 @@ di-commit (local) kecuali dinyatakan lain.
 - UPGRADE v2.1 (2026-08-19): `--compress` flag — pakai `hash160(compressed_pubkey)` utk
   matching. Auto-detect: pubkey 02/03 → compressed, 04 → uncompressed. `--no-compress`
   force uncompressed (legacy). Batch mode auto-detect dari format pubkey di file.
+- STANDAR FILTER (2026-11-24, permintaan owner): SEMUA mode generate hanya menerima
+  kandidat tanpa karakter hex identik bersebelahan lebih dari 2 — "22a22" BOLEH,
+  "222"/"000"/"fff" DITOLAK. Dihitung pada 64-char zero-padded (leading zero IKUT
+  dihitung → key kecil selalu gugur; itu konsekuensi aturan, bukan bug).
+  PERMINTAAN OWNER: jaminan DITANAM DI TITIK GENERATE, bukan generate-lalu-difilter
+  (dianggap "bohong" kalau masih pasca-filter). Implementasi: dekorator
+  `candidates._conforming` pada `gen_random_infinite / gen_patterns / gen_pid_salt /
+  gen_mt19937 / gen_brainwallet / gen_blockseed / gen_multibit` → stream keluaran
+  SUDAH conform by construction; `run_parallel()` / `_gpu_stream()` adalah TESTER
+  murni (TIDAK menyaring apa pun — tidak ada `max_adj_run` lagi). Konsekuensi: angka
+  "kandidat" yang dilaporkan == angka yang benar-benar diuji. Helper:
+  `candidates.MAX_ADJ_RUN` / `has_adj_run_over()` / `filter_adj_run()` (dipakai
+  dekorator + `bench_gpu_vs_cpu.py` yang stream custom-nya menyaring sendiri).
+  Catatan jujur: keluarga hash (sha256/sha1prng/mt19937) tak bisa "memaksa" output —
+  dekorator melewati (bukan menyimpan lalu menyaring) kandidat tak-patuh, yang
+  penting tiap kandidat yang DIUJI sudah conform.
+  Biaya terukur: 1,43 us/key; producer random-infinite+conform 227 k/s (vs 528 k/s
+  mentah) — masih di atas laju serangan 8 worker (~120-160k/s); ~20% kandidat CSPRNG
+  dilewati saat generate.
+- KEBIJAKAN GENERATE (2026-11-24, keputusan owner): angka KECIL = ruang yang sudah
+  pernah dicek → JANGAN di-generate lagi (bukan cuma difilter). `smart_gen()` (mode
+  mixed + batch) kini hanya pid-salt + patterns + MT19937 + brainwallet — trivial,
+  smallint, constants, timestamps, block_nonce, lcg, js_math, java_random, xorshift
+  DIBUANG dari stream (`max_small` dibiarkan di tanda tangan, kini diabaikan).
+  `weak_rng_gens()` (mode weak-rng) = MT19937 saja. `attack_entropy_fail()` dan
+  `attack_vanity_bug()` DILEWATI total: cetak "DILEWATI …", `run_parallel` tak
+  dipanggil (mode `--mode entropy-fail`/`vanity-bug` tetap ada di CLI, hanya kosong).
+  Yang tetap jalan penuh: pid-salt / MT19937 / brainwallet / blockseed / multibit /
+  random-infinite (~79-80% lolos filter) + `gen_patterns()` (5/251 lolos).
+  Jangan kembalikan keluarga angka kecil tanpa keputusan owner baru — ruangnya sudah
+  tersapu sweep sebelumnya. Melonggarkan aturan = ubah dasar cek di `has_adj_run_over`.
 - Pakai: `python3 tools/weakkey/weakkey_attack.py --target-pub <HEX> --mode mixed [--workers 8] [--compress]`
   `python3 tools/weakkey/weakkey_attack.py --check` (interaktif)
   `python3 tools/weakkey/weakkey_attack.py --batch pubkeys.txt --mode mixed` (auto-detect)
   `python3 tools/weakkey/weakkey_attack.py --batch data/public_key.txt --mode mixed` (addr<TAB>pub)
-- Unit test: `python3 tools/weakkey/test_candidates.py` (67 test, termasuk parity ctypes vs coincurve + compressed matching).
+- Unit test: `python3 tools/weakkey/test_candidates.py` (87 test, termasuk parity ctypes vs coincurve, compressed matching, bukti SEMUA generator keluarkan kandidat conform by construction (0 pasca-filter), dan bukti keluarga angka kecil tidak di-generate lagi).
 - CATATAN: search space jutaan kandidat. Untuk key 256-bit RANDOM (mis. data/public_key.txt)
   peluang ~0% — tool ini cuma untuk key SENGAJA lemah / RNG broken / brainwallet.
   Mode ecdsa-reuse butuh `--sigs <file>` (r,s,z per baris / DER).
