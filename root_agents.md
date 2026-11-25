@@ -37,7 +37,7 @@
 Daftar script/tool yang dibuat atau diperbaiki beserta cara pakai. Semua sudah
 di-commit (local) kecuali dinyatakan lain.
 
-### 1. tools/weakkey/weakkey_attack.py — weak BTC pubkey attack toolkit (v2 parallel)
+### 1. weakkey/tools/weakkey_attack.py — weak BTC pubkey attack toolkit (v2 parallel)
 - Serang private key dari PUBLIC KEY saja (uncompressed 65B / compressed 33B / raw-x 64B).
 - Mode: mixed, brainwallet, weak-rng, vanity-bug, ecdsa-reuse, pattern, dictionary, entropy-fail.
 - UPGRADE v2 (2026-08-08): generator modular di `candidates.py` (trivial, smallint, constants,
@@ -80,11 +80,11 @@ di-commit (local) kecuali dinyatakan lain.
   random-infinite (~79-80% lolos filter) + `gen_patterns()` (5/251 lolos).
   Jangan kembalikan keluarga angka kecil tanpa keputusan owner baru — ruangnya sudah
   tersapu sweep sebelumnya. Melonggarkan aturan = ubah dasar cek di `has_adj_run_over`.
-- Pakai: `python3 tools/weakkey/weakkey_attack.py --target-pub <HEX> --mode mixed [--workers 8] [--compress]`
-  `python3 tools/weakkey/weakkey_attack.py --check` (interaktif)
-  `python3 tools/weakkey/weakkey_attack.py --batch pubkeys.txt --mode mixed` (auto-detect)
-  `python3 tools/weakkey/weakkey_attack.py --batch data/public_key.txt --mode mixed` (addr<TAB>pub)
-- Unit test: `python3 tools/weakkey/test_candidates.py` (87 test, termasuk parity ctypes vs coincurve, compressed matching, bukti SEMUA generator keluarkan kandidat conform by construction (0 pasca-filter), dan bukti keluarga angka kecil tidak di-generate lagi).
+- Pakai: `python3 weakkey/tools/weakkey_attack.py --target-pub <HEX> --mode mixed [--workers 8] [--compress]`
+  `python3 weakkey/tools/weakkey_attack.py --check` (interaktif)
+  `python3 weakkey/tools/weakkey_attack.py --batch pubkeys.txt --mode mixed` (auto-detect)
+  `python3 weakkey/tools/weakkey_attack.py --batch data/public_key.txt --mode mixed` (addr<TAB>pub)
+- Unit test: `python3 weakkey/tools/test_candidates.py` (87 test, termasuk parity ctypes vs coincurve, compressed matching, bukti SEMUA generator keluarkan kandidat conform by construction (0 pasca-filter), dan bukti keluarga angka kecil tidak di-generate lagi).
 - CATATAN: search space jutaan kandidat. Untuk key 256-bit RANDOM (mis. data/public_key.txt)
   peluang ~0% — tool ini cuma untuk key SENGAJA lemah / RNG broken / brainwallet.
   Mode ecdsa-reuse butuh `--sigs <file>` (r,s,z per baris / DER).
@@ -93,8 +93,8 @@ di-commit (local) kecuali dinyatakan lain.
   Field aritmetika mod p, doubling (8Y^4), mixed-add window-4, compare Jacobian (tanpa invmod).
   Host mode: search/dump/list/range/dumpkeys. `weakkey_gpu.py` memakai GPU (list + range 256-bit)
   dengan early-stop dan verifikasi CPU. Throughput terukur: ~458k cand/s (kunci kecil, skip leading nibble)
-  / ~155k cand/s (rentang 256-bit penuh) pada M2. Build host: `bash tools/weakkey/build.sh`.
-  Uji kebenaran: `tools/weakkey/test_gpu_random.py` (210 nilai acak 256-bit + batas, 210/210 cocok).
+  / ~155k cand/s (rentang 256-bit penuh) pada M2. Build host: `bash weakkey/tools/build.sh`.
+  Uji kebenaran: `weakkey/tools/test_gpu_random.py` (210 nilai acak 256-bit + batas, 210/210 cocok).
 - `weakkey_attack.py --gpu` (2026-11-19): jalur GPU untuk target PUBKEY TUNGGAL; kandidat
   di-stream ke host mode `list` dan dibandingkan sebagai titik (X,Y), bukan hash160.
   Berlaku untuk mode yang memakai `run_parallel` (mixed/smart, weak-rng, pattern, vanity-bug,
@@ -105,7 +105,7 @@ di-commit (local) kecuali dinyatakan lain.
   target di luar stream): CPU 8 worker = 120.918 cand/s (41,35s); GPU (--gpu) =
   80.334 cand/s (62,24s) -> 0,66x, GPU LEBIH LAMBAT. Penyebab: bottleneck streaming
   hex lewat pipe Python (~80k baris/s), bukan kernel (host-only ~155k cand/s).
-  Reproduksi: `python3 tools/weakkey/bench_gpu_vs_cpu.py --n 5000000`.
+  Reproduksi: `python3 weakkey/tools/bench_gpu_vs_cpu.py --n 5000000`.
   Artinya: untuk target tunggal, CPU 8 worker tetap pilihan default; GPU berguna
   saat CPU sedang dipakai collider/keyhunt.
 
@@ -164,7 +164,7 @@ di-commit (local) kecuali dinyatakan lain.
   033c4a45... -> address 1HsMJxNiV7TLxmoF6uJNkydxPFDog4NQum. Terverifikasi = solusi resmi
   puzzle p20 (range [2^19,2^20), value 0.020 BTC). BUKAN related ke data/public_key.txt.
 
-### 7. tools/weakkey/blockseed — serangan coinbase 50-BTC era (2010-2012) [TERTUTUP, lihat PENUTUPAN di bawah]
+### 7. weakkey/tools/blockseed — serangan coinbase 50-BTC era (2010-2012) [TERTUTUP, lihat PENUTUPAN di bawah]
 - Temuan (2026-08-08): 29.193 address di public_key.txt bernilai PERSIS 50.00000000 BTC
   (total cluster ~1,47 juta BTC) = coinbase P2PK reward era blok 1..210.000 (2009-2012).
   Kunci dibuat saat blok di-mining => timestamp blok (publik, presisi 1 dtk) adalah
@@ -176,14 +176,14 @@ di-commit (local) kecuali dinyatakan lain.
 - `weakkey_attack.py --mode blockseed --batch data/public_key.txt [--prng X --seed-window N]`.
   Match -> append ke KEYFOUNDKEYFOUND.txt.
 - **Jalankan manual** (jika serangan mati sebelum selesai):
-  `bash tools/weakkey/run_blockseed_attack.sh`           # semua 8 PRNG (~3,2 jam @8 worker)
-  `bash tools/weakkey/run_blockseed_attack.sh mt19937`   # satu PRNG saja
+  `bash weakkey/tools/run_blockseed_attack.sh`           # semua 8 PRNG (~3,2 jam @8 worker)
+  `bash weakkey/tools/run_blockseed_attack.sh mt19937`   # satu PRNG saja
   Resume otomatis: skip PRNG yg log-nya sudah "selesai". Log: logs/blockseed/<prng>.log
 - Klasifikasi coinbase (opsional, untuk laporan):
-  `python3 tools/weakkey/classify_coinbase.py --resume --limit 500` -> data/coinbase_targets.tsv
+  `python3 weakkey/tools/classify_coinbase.py --resume --limit 500` -> data/coinbase_targets.tsv
   CATATAN: blockstream/esplora TIDAK meng-index P2PK coinbase ke address-history,
   jadi classifier butuh blockchain.info (rate-limit ketat). Attack TIDAK perlu klasifikasi.
-- Unit test: `python3 tools/weakkey/test_candidates.py` (termasuk test_blockseed_*).
+- Unit test: `python3 weakkey/tools/test_candidates.py` (termasuk test_blockseed_*).
 - CPU only (ctypes libsecp256k1 + multiprocessing). GPU collider boleh tetap jalan;
   stop keyhunt (CPU) dulu sebelum menjalankan serangan ini.
 - **PENUTUPAN (2026-08-09): dataset public_key.txt = EXHAUSTED, 0 match.**
@@ -193,8 +193,8 @@ di-commit (local) kecuali dinyatakan lain.
   signature). Kunci kemungkinan besar CSPRNG. JANGAN ulangi serangan terhadap
   dataset ini tanpa hipotesis/bukti baru yang konkret. Kembalikan compute ke
   collider b1000. Laporan: logs/blockseed/STATUS.md (bagian PENUTUPAN RESMI).
-  Runner mixed (low-entropy seed kecil): `bash tools/weakkey/run_mixed_attack.sh`;
-  probe spent: `tools/weakkey/probe_coinbase_spent.py`.
+  Runner mixed (low-entropy seed kecil): `bash weakkey/tools/run_mixed_attack.sh`;
+  probe spent: `weakkey/tools/probe_coinbase_spent.py`.
 
 ### 7b. mode `multibit` di weakkey_attack.py — Java SHA1PRNG time-seeded (Baru, 2026-08-09)
 - HIPOTESIS (video Dark-Side-Crypto "Generate-KEY + Ganteng-Bit-File"): wallet
@@ -202,9 +202,9 @@ di-commit (local) kecuali dinyatakan lain.
   yang di-seed waktu lemah. INI BEDA dari `java_random` (LCG) yg sudah exhaust.
 - `candidates.py`: `_sha1prng_bytes()` bit-exact vs OpenJDK 17 (state=SHA1(seed);
   output=SHA1(state); state=(state+output+1) mod 2^160, Java sign-extend,
-  carry MSB→LSB). Referensi: `tools/weakkey/ref/SHA1PRNGRef.java` (compile+run
+  carry MSB→LSB). Referensi: `weakkey/tools/ref/SHA1PRNGRef.java` (compile+run
   untuk regen vektor). Test 61 pass termasuk 4 vektor SHA1PRNG.
-- Pakai: `python3 tools/weakkey/weakkey_attack.py --mode multibit --batch FILE
+- Pakai: `python3 weakkey/tools/weakkey_attack.py --mode multibit --batch FILE
   [--multibit-seedfmt u32be|u32le|u64be|u64le|str|str0 ...]
   [--seed-start TS --seed-end TS]` (default window 2009-01-03..2016-12-31).
   Union-window: satu pass cover semua target. Match → KEYFOUNDKEYFOUND.txt.
@@ -213,13 +213,13 @@ di-commit (local) kecuali dinyatakan lain.
 - DATASET TARGET (build, 2026-08-09): `data/multibit_target/` berisi SQLite
   `addr.db` (h160 unik P2PKH, dedup on-disk) + log progress `addr.done` +
   gz mentah di `dl/`. Bangun/kaji ulang dengan:
-  `python3 tools/weakkey/build_multibit_target.py [--start D] [--end D]`
+  `python3 weakkey/tools/build_multibit_target.py [--start D] [--end D]`
   (resumable; download blockchair outputs per-hari 2009-2016, decode base58,
   simpan hash160 20B; ingest ~2.900 file, selesai beberapa jam di CPU sibuk).
 - Scan besar (RAM-lean): `--target-db data/multibit_target/addr.db` memuat
   hash160 terurut jadi blob `bytes` + bisect (bukan frozenset) → dipakai
   langsung oleh `attack_multibit_db`. Fork COW sharing, bebas pickle.
-  `python3 tools/weakkey/weakkey_attack.py --target-db data/multibit_target/addr.db
+  `python3 weakkey/tools/weakkey_attack.py --target-db data/multibit_target/addr.db
   --mode multibit [--multibit-seedfmt ...] [--workers 8]`
 - Resep lengkap + catatan jujur (peluang ~1%, Randstorm 1:300, RNG asli
   MultiBit = `new SecureRandom()` TANPA setSeed → spekulatif): 
@@ -388,10 +388,10 @@ di-commit (local) kecuali dinyatakan lain.
 - Driver `run_target_bin_sweep.sh`: marker diperiksa SEBELUM memulai tahap dan
   sesudah tiap tahap → sweep berhenti sendiri, tidak lanjut tahap berikutnya.
   `start` MENOLAK jalan bila marker ada (temuan wajib ditinjau); override sadar:
-  `RESET_MATCH=1 bash tools/weakkey/run_target_bin_sweep.sh start`.
+  `RESET_MATCH=1 bash weakkey/tools/run_target_bin_sweep.sh start`.
   `reset` mengarsipkan marker (`.match_seen.old.<epoch>`), ledger & laporan
   TIDAK pernah dihapus. `status` menampilkan MATCH + path laporan;
-  `bash tools/weakkey/run_target_bin_sweep.sh match` mencetak laporan terbaru.
+  `bash weakkey/tools/run_target_bin_sweep.sh match` mencetak laporan terbaru.
 - Uji terverifikasi (sandbox): tanaman `mt19937@1231006505` → MATCH, marker +
   laporan + jsonl + ledger terisi (fsync), `start` menolak (rc=1), `run` keluar
   0,3 dtk tanpa memulai tahap, `reset` mengarsipkan marker.
